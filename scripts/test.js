@@ -1,25 +1,36 @@
 import http from 'k6/http';
-import { check, sleep } from 'k6';
+import { sleep, check } from 'k6';
 
 export const options = {
-  scenarios: {
-    million_requests_job: {
-      executor: 'shared-iterations',
-      vus: 200,                  // Adjust based on your CPU/network capacity
-      iterations: 1000000,       // Exactly 1 million requests
-      maxDuration: '1h',         // Safety timeout window
-    },
-  },
+  stages: [
+    { duration: '30s', target: 20 },
+    { duration: '1m', target: 20 },
+    { duration: '30s', target: 0 },
+  ],
 };
 
 export default function () {
-  // Replace with your actual target URL
-  const res = http.get('https://test.k6.io');
+  // MUST HAVE :8080/api/v1/bookings AT THE END
+  // const url = 'http://booking-service:8080/api/v1/bookings';
+  const url = 'http://api-gateway:8080/api/v1/bookings';
 
-  check(res, {
-    'status is 200': (r) => r.status === 200,
+  const payload = JSON.stringify({
+    userId: "customer_john_doe",
+    eventId: "concert_rock_2026",
+    seatId: "Row-A-Seat-012"
   });
 
-  // Optional: Add pacing if you want to avoid overwhelming your machine/target instantly
-  // sleep(0.1);
+  const params = {
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  };
+
+  const res = http.post(url, payload, params);
+
+  check(res, {
+    'status is 200 or 201': (r) => r.status === 200 || r.status === 201,
+  });
+
+  sleep(1);
 }
