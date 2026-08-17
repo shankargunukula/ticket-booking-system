@@ -54,11 +54,10 @@ services:
       kafka:
         condition: service_healthy
     extra_hosts:
-      - "host.docker.internal:host-gateway" # 🌟 Allows container to see your local PC apps
+      - "host.docker.internal:host-gateway"
     environment:
       - SPRING_DATA_REDIS_HOST=redis
       - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:29092
-      # 🌟 TARGET FIXED: Explicitly routes connection traffic to /postgres database
       - SPRING_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:5432/postgres?options=-c%20search_path=public
       - SPRING_DATASOURCE_USERNAME=postgres
       - SPRING_DATASOURCE_PASSWORD=system
@@ -70,7 +69,7 @@ services:
     build: ./api-gateway
     container_name: ticket-api-gateway
     ports:
-      - "8080:8080" # External Entry Point for Postman/Users
+      - "8080:8080"
     depends_on:
       - redis
       - booking-service
@@ -79,21 +78,10 @@ services:
     networks:
       - ticket-network
 
-  # 🌟 FIX: Grafana can now find and attach to the prometheus service block cleanly
-  grafana:
-    image: grafana/grafana:10.2.2
-    container_name: ticket-grafana
-    ports:
-      - "3000:3000"
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-    depends_on:
-      - influxdb
-    networks:
-      - ticket-network
-
+  # 5. Time-Series Database for k6 Metrics
   influxdb:
     image: influxdb:1.8
+    container_name: ticket-influxdb
     ports:
       - "8086:8086"
     environment:
@@ -101,8 +89,24 @@ services:
     networks:
       - ticket-network
 
+  # 6. Metrics Visualization UI
+  grafana:
+    image: grafana/grafana:10.2.2
+    container_name: ticket-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+    depends_on:
+      - influxdb
+    networks:
+      - ticket-network
+
   k6:
     image: grafana/k6:latest
+    container_name: ticket-k6
     volumes:
       - ./scripts:/scripts
     environment:
@@ -110,5 +114,8 @@ services:
     command: run /scripts/test.js
     depends_on:
       - influxdb
+      - api-gateway
+    extra_hosts:
+      - "host.docker.internal:host-gateway" # 🌟 Forces host routing capability on Linux/Mac/Windows
     networks:
       - ticket-network
