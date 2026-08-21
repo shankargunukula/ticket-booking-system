@@ -21,3 +21,13 @@ docker compose run --rm -e K6_OUT="influxdb=http://influxdb:8086/k6" k6 run --ta
 docker compose up --build -d notification-service
 docker compose up --build -d booking-service
 
+
+
+# create WEB application
+# 1. Initialize a clean React + TypeScript workspace using Vite
+npm create vite@latest web-frontend -- --template react-ts
+
+# 2. Navigate inside and add the Axios library for routing HTTP API requests
+cd web-frontend
+npm install axios
+

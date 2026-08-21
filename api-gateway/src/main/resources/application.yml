@@ -17,7 +17,17 @@ spring:
             - Path=/api/v1/bookings/**
           filters:
             - AuthenticationFilter  # This runs the token validation checks
-
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins: "http://localhost:5173"  # Points straight to your React dev port
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
 jwt:
   secret: "YOUR_32_BYTE_LONG_SECURE_HMAC_ENCRYPTION_SECRET_KEY"
   expiration: 86400000 # Token valid for 24 Hours
