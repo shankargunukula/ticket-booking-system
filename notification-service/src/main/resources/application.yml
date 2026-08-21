@@ -1,0 +1,44 @@
+server:
+  port: 8082
+spring:
+  application:
+    name: notification-service
+  # FIX 1: Enforces the Gateway core filter engine to intercept and generate trace metrics
+  observability:
+    enabled: true
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: 6379
+  mail:
+    host: ${SMTP_HOST:smtp.gmail.com}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME:your-email@gmail.com}
+    password: ${SMTP_PASSWORD:your-app-specific-password}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+
+smpp:
+  # Instructs Spring to look for Docker's variable; defaults to localhost ONLY if run bare-metal
+  host: ${SMPP_HOST:localhost}
+  port: ${SMPP_PORT:2775}
+  system-id: ${SMPP_SYSTEM_ID:smppclient1}
+  password: ${SMPP_PASSWORD:password}
+  system-type: ${SMPP_SYSTEM_TYPE:VMA}
+  ton: 1
+  npi: 1
+  source-address: "TICKET_OTP"
+
+management:
+  tracing:
+    sampling:
+      probability: 1.0 # Capture 100% of test requests
+  zipkin:
+    tracing:
+      endpoint: http://zipkin:9411/api/v2/spans
+
+# FIX 2: RESTORES VISIBILITY BY OVERRIDING ROOT APPENDER
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %5p [${spring.application.name:},%X{traceId:-},%X{spanId:-}] %-40.40logger{39} : %msg%n"

@@ -18,5 +18,6 @@ docker compose run --rm -e K6_OUT="influxdb=http://influxdb:8086/k6" k6 run --ta
 
 
 
-
+docker compose up --build -d notification-service
+docker compose up --build -d booking-service
 

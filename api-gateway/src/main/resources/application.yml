@@ -3,20 +3,92 @@ server:
 spring:
   application:
     name: api-gateway
+
+  # FIX 1: Turn on Spring Boot 3 native reactive context propagation
+  reactor:
+    context-propagation: auto
   data:
     redis:
       host: ${SPRING_DATA_REDIS_HOST:localhost}
       port: 6379
   cloud:
     gateway:
+      # FIX 1: Enforces the Gateway core filter engine to intercept and generate trace metrics
+      observability:
+        enabled: true
       routes:
         - id: booking_route
           uri: http://booking-service:8080
           predicates:
             - Path=/api/v1/bookings/**
           filters:
+            - AuthenticationFilter  # <--- Added Custom JWT Validation Filter
             - name: RequestRateLimiter
               args:
                 redis-rate-limiter.replenishRate: 10
                 redis-rate-limiter.burstCapacity: 20
                 key-resolver: "#{@userKeyResolver}"
+
+        # NEW: Route forwarding authentication/OTP to Notification Service
+        - id: notification_route
+          uri: http://notification-service:8082
+          predicates:
+            - Path=/notifications/**
+          filters:
+            - AuthenticationFilter  # Ensures the tracing lifecycle executes on this route
+
+      # =========================================================================
+      # FIXED: Structurally Validated and Cleaned Global CORS Section
+      # =========================================================================
+#      globalcors:
+#        add-to-simple-url-handler-mapping: true # CRUCIAL: Intercepts browser OPTIONS requests early
+#        cors-configurations:
+#          '[/**]':
+#            allowedOrigins: "http://localhost:5173"
+#            allowedMethods:
+#              - GET
+#              - POST
+#              - PUT
+#              - DELETE
+#              - OPTIONS
+#            allowedHeaders:
+#              - "Content-Type"
+#              - "Authorization"
+#              - "X-B3-TraceId"
+#              - "X-B3-SpanId"
+#              - "X-B3-Sampled"
+#              - "traceparent"
+#            allowCredentials: true # Allows explicit token transmission across origins
+#      # =========================================================================
+
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID}
+            client-secret: ${GOOGLE_CLIENT_SECRET}
+            scope:
+              - openid
+              - profile
+              - email
+            redirect-uri: "{baseUrl}/login/oauth2/code/google" # Default Spring handler
+
+jwt:
+  secret: yourSuperSecretKeyThatIsAtLeast256BitsLongForHMACSHAEncryption
+  expiration: 86400000 # 1 day in milliseconds
+
+management:
+  tracing:
+    sampling:
+      probability: 1.0        # Sample 100% of interactions
+    propagation:
+      type: [B3, W3C]         # CRUCIAL: Instructs Micrometer to accept B3 headers from Frontend
+  zipkin:
+    tracing:
+      endpoint: http://localhost:9411/api/v2/spans # Standard local Zipkin receiver endpoint
+
+# Keep your existing logging configuration as it is already configured correctly:
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %5p [${spring.application.name:},%X{traceId:-},%X{spanId:-}] %-40.40logger{39} : %msg%n"

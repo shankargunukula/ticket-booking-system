@@ -2,6 +2,10 @@ networks:
   ticket-network:
     driver: bridge
 
+volumes:
+  redis-data:
+    driver: local
+
 services:
   # 1. In-Memory Data Store & Fast Seat Locking Engine
   redis:
@@ -9,8 +13,11 @@ services:
     container_name: ticket-redis
     ports:
       - "6379:6379"
+    volumes:
+      - redis-data:/data
     networks:
       - ticket-network
+    restart: always
 
   # 2. Async Message Broker Infrastructure (Zookeeper + Kafka)
   zookeeper:
@@ -55,7 +62,10 @@ services:
         condition: service_healthy
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    ports:
+      - "8081:8081"
     environment:
+      - SERVER_PORT=8081
       - SPRING_DATA_REDIS_HOST=redis
       - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:29092
       - SPRING_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:5432/postgres?options=-c%20search_path=public
@@ -70,15 +80,63 @@ services:
     container_name: ticket-api-gateway
     ports:
       - "8080:8080"
+    volumes:
+      # Maps local .m2 directory into the Linux container
+      - ~/.m2:/root/.m2
     depends_on:
-      - redis
-      - booking-service
+      redis:
+        condition: service_started
+      booking-service:
+        condition: service_started
+      notification-service:
+        condition: service_started
     environment:
+      - SERVER_PORT=8080
       - SPRING_DATA_REDIS_HOST=redis
+      - NOTIFICATION_SERVICE_URL=http://tbs-notification-service:8082
+      - BOOKING_SERVICE_URL=http://ticket-booking-service:8081
     networks:
       - ticket-network
 
-  # 5. Time-Series Database for k6 Metrics
+  # 5. Production-Ready Stable Open Source SMSC Telecom Channel Simulator
+  smpp-simulator:
+    image: bitsensedev/smpp-sim:latest
+    container_name: ticket-smpp-simulator
+    ports:
+      - "2775:2775"  # Binary TCP socket routing channel
+      - "8088:8989"  # Maps management interface port
+    networks:
+      - ticket-network
+    restart: always
+
+  # 6. Notification Hub Core Microservice
+  notification-service:
+    build: ./notification-service
+    container_name: tbs-notification-service
+    ports:
+      - "8082:8082"
+    volumes:
+      - ~/.m2:/root/.m2
+    environment:
+      - SERVER_PORT=8082
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+      - SMPP_HOST=smpp-simulator
+      - SMPP_PORT=2775
+      - SMTP_HOST=smtp.gmail.com
+      - SMTP_PORT=587
+      - SMTP_USERNAME=your-email@gmail.com
+      - SMTP_PASSWORD=your-app-password
+    depends_on:
+      redis:
+        condition: service_started
+      smpp-simulator:
+        condition: service_started
+    networks:
+      - ticket-network
+    restart: on-failure
+
+  # 7. Time-Series Database for k6 Metrics
   influxdb:
     image: influxdb:1.8
     container_name: ticket-influxdb
@@ -89,7 +147,7 @@ services:
     networks:
       - ticket-network
 
-  # 6. Metrics Visualization UI
+  # 8. Metrics Visualization UI
   grafana:
     image: grafana/grafana:10.2.2
     container_name: ticket-grafana
@@ -104,6 +162,7 @@ services:
     networks:
       - ticket-network
 
+  # 9. Performance & Load Testing Container
   k6:
     image: grafana/k6:latest
     container_name: ticket-k6
@@ -116,6 +175,16 @@ services:
       - influxdb
       - api-gateway
     extra_hosts:
-      - "host.docker.internal:host-gateway" # 🌟 Forces host routing capability on Linux/Mac/Windows
+      - "host.docker.internal:host-gateway"
     networks:
       - ticket-network
+
+  # 10. Centralized Distributed Tracing Engine Dashboard
+  zipkin:
+    image: openzipkin/zipkin:latest
+    container_name: ticket-zipkin
+    ports:
+      - "9411:9411"
+    networks:
+      - ticket-network
+    restart: always
