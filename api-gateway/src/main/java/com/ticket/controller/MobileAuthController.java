@@ -4,6 +4,8 @@ import com.ticket.dto.AuthResponse;
 import com.ticket.dto.OtpRequest;
 import com.ticket.dto.OtpVerification;
 import com.ticket.service.JwtService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -11,67 +13,57 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
+import java.util.HashMap;
 import java.util.Map;
 
+@Slf4j
 @RestController
-@RequestMapping("/auth/otp")
+@RequestMapping("/api/v1/auth")
+@RequiredArgsConstructor
 public class MobileAuthController {
 
-    private final WebClient webClient;
+    private final WebClient.Builder webClientBuilder;
     private final JwtService jwtService;
-    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(MobileAuthController.class);
 
-    // Injects the downstream microservice URI from your docker-compose environment network
-    public MobileAuthController(WebClient.Builder webClientBuilder,
-                                @Value("${NOTIFICATION_SERVICE_URL:http://localhost:8082}") String notificationServiceUrl,
-                                JwtService jwtService) {
-        this.webClient = webClientBuilder.baseUrl(notificationServiceUrl).build();
-        this.jwtService = jwtService;
-    }
+    @Value("${notification.service.url:http://tbs-notification-service:8082}")
+    private String notificationServiceUrl;
 
-    /**
-     * Proxies the phone number request downstream to the Notification Microservice
-     */
-    @PostMapping("/send")
-    public Mono<ResponseEntity<String>> sendOtp(@RequestBody OtpRequest request) {
-        // This explicit line will now trigger with your trace ID!
-        log.info("API Gateway received OTP request for phone: {}", request.getMobileNumber());
+    @PostMapping("/login")
+    public Mono<ResponseEntity<String>> requestOtp(@RequestBody OtpRequest request) {
+        log.info("Processing login routing sequence for mobile entry: {}", request.phoneNumber());
 
-        return webClient.post()
-                .uri("/notifications/otp/send")
+        return webClientBuilder.build()
+                .post()
+                .uri(notificationServiceUrl + "/api/v1/otp/generate")
                 .bodyValue(request)
-                .retrieve() // Utilises standard non-blocking retrieval channels
+                .retrieve()
                 .toEntity(String.class)
                 .onErrorReturn(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                        .body("Notification service unreachable."));
+                        .body("Gateway communication pipeline broken."));
     }
 
-    /**
-     * Relays token check downstream and issues a secure application JWT on success
-     */
     @PostMapping("/verify")
-    public Mono<ResponseEntity<AuthResponse>> verifyOtp(@RequestBody OtpVerification verification) {
-        return webClient.post()
-                .uri("/notifications/otp/verify")
-                .bodyValue(verification)
+    public Mono<ResponseEntity<AuthResponse>> verifyAndLogin(@RequestBody OtpVerification verification) {
+        log.info("Validating entry code handshake mapping for: {}", verification.phoneNumber());
+
+        Map<String, String> payload = Map.of(
+                "phoneNumber", verification.phoneNumber(),
+                "otpCode", verification.otpCode()
+        );
+
+        return webClientBuilder.build()
+                .post()
+                .uri(notificationServiceUrl + "/api/v1/otp/verify")
+                .bodyValue(payload)
                 .retrieve()
-                .bodyToMono(Map.class) // Reads verified fields map from notification service response
-                .flatMap(responseMap -> {
-                    boolean isVerified = (boolean) responseMap.getOrDefault("verified", false);
-
-                    if (isVerified) {
-                        // Issue internal application infrastructure access passport token at the gateway edge
-                        String token = jwtService.generateToken(
-                                verification.getMobileNumber(),
-                                Map.of("roles", "ROLE_USER", "provider", "MOBILE")
-                        );
-                        return Mono.just(ResponseEntity.ok(new AuthResponse(token, verification.getMobileNumber())));
+                .bodyToMono(Boolean.class)
+                .map(isValid -> {
+                    if (Boolean.TRUE.equals(isValid)) {
+                        String token = jwtService.generateToken(verification.phoneNumber(), Map.of("role", "ROLE_MOBILE"));
+                        return ResponseEntity.ok(new AuthResponse(token, "Authentication handshake completed."));
                     }
-
-                    // Invalid/Expired OTP branch scenario
-                    return Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).<AuthResponse>build());
-                })
-                // Fallback stream logic handles service connectivity drops gracefully
-                .onErrorResume(e -> Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build()));
+                    return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                            .body(new AuthResponse(null, "Provided OTP code is invalid."));
+                });
     }
 }

@@ -1,8 +1,3 @@
 package com.ticket.dto;
 
-import lombok.Data;
-
-@Data
-public class OtpRequest {
-    private String mobileNumber;
-}
+public record OtpRequest(String phoneNumber) {}

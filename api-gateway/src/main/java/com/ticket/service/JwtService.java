@@ -14,10 +14,11 @@ import java.util.Map;
 @Service
 public class JwtService {
 
-    @Value("${jwt.secret}")
+    // Reads secret directly out of application.yml injection profiles safely
+    @Value("${jwt.secret:YOUR_SUPER_LONG_SECRET_KEY_MUST_BE_AT_LEAST_32_BYTES_LONG!}")
     private String secret;
 
-    @Value("${jwt.expiration}")
+    @Value("${jwt.expiration:86400000}") // 24 Hours default fallback
     private long expirationTime;
 
     private SecretKey getSigningKey() {
@@ -34,12 +35,15 @@ public class JwtService {
                 .compact();
     }
 
+    /**
+     * 🚀 FIXED: Rewritten using JJWT 0.12.x standard .parser() configuration syntax
+     */
     public Claims extractAllClaims(String token) {
         return Jwts.parser()
                 .verifyWith(getSigningKey())
                 .build()
                 .parseSignedClaims(token)
-                .getPayload();
+                .getPayload(); // .getPayload() replaces old deprecated .getBody() method
     }
 
     public boolean isTokenValid(String token) {
@@ -48,5 +52,9 @@ public class JwtService {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    public String extractUsername(String token) {
+        return extractAllClaims(token).getSubject();
     }
 }

@@ -1,79 +1,100 @@
 package com.ticket.booking.service;
 
-import com.ticket.booking.config.KafkaConfig;
 import com.ticket.booking.entity.EventInventory;
 import com.ticket.booking.entity.TicketOrder;
 import com.ticket.booking.model.BookingRequest;
 import com.ticket.booking.model.TicketOrderEvent;
+import com.ticket.booking.publisher.TicketOrderPublisher;
 import com.ticket.booking.repository.EventInventoryRepository;
 import com.ticket.booking.repository.TicketOrderRepository;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.kafka.core.KafkaTemplate;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+@Slf4j
 @Service
+@RequiredArgsConstructor
 public class BookingService {
 
-    @Autowired
-    private RedisTemplate<String, Object> redisTemplate;
+    private final EventInventoryRepository inventoryRepository;
+    private final TicketOrderRepository orderRepository;
 
-    @Autowired
-    private KafkaTemplate<String, Object> kafkaTemplate;
-
-    // 🌟 FIX: Ensure BOTH database repositories are cleanly autowired here
-    @Autowired
-    private EventInventoryRepository inventoryRepository;
-
-    @Autowired
-    private TicketOrderRepository orderRepository;
-
-    private static final String LOCK_PREFIX = "lock:event:%s:seat:%s";
+    // 🚀 FIXED: Declared the field so Lombok's @RequiredArgsConstructor injects it automatically
+    private final TicketOrderPublisher ticketOrderPublisher;
 
     /**
-     * Handles fast distributed reservation seat holding via Redis caches
+     * Phase 1: High-Speed Seat Allocation Reservation Handshake
+     * Evaluates initial availability status, creates a unique transaction tracking key,
+     * and sets a database seat hold reservation state.
      */
-    public String processBooking(BookingRequest request) throws IllegalStateException {
-        String lockKey = String.format(LOCK_PREFIX, request.getEventId(), request.getSeatId());
-        String uniqueOrderId = UUID.randomUUID().toString();
+    @Transactional
+    public String processBooking(BookingRequest request) {
+        log.info("Evaluating transaction booking requests parameters for user context: {}", request.userId());
 
-        Boolean lockAcquired = redisTemplate.opsForValue()
-                .setIfAbsent(lockKey, uniqueOrderId, Duration.ofMinutes(10));
+        // Locate seat state parameters using Java 21 record unboxing extraction features
+        EventInventory seat = inventoryRepository.findByEventIdAndSeatId(request.eventId(), request.seatId())
+                .orElseThrow(() -> new IllegalArgumentException("Target event inventory tracking mapping not found."));
 
-        if (Boolean.TRUE.equals(lockAcquired)) {
-            TicketOrderEvent orderEvent = new TicketOrderEvent(
-                    uniqueOrderId,
-                    request.getUserId(),
-                    request.getEventId(),
-                    request.getSeatId(),
-                    "PENDING_PAYMENT",
-                    Instant.now()
-            );
-
-            kafkaTemplate.send(KafkaConfig.BOOKING_TOPIC, uniqueOrderId, orderEvent);
-            return uniqueOrderId;
-        } else {
-            throw new IllegalStateException("Seat is already reserved by another user!");
+        // Evaluate lock status bounds securely
+        if (!"AVAILABLE".equals(seat.getStatus())) {
+            throw new IllegalStateException("Selected seat identifier is already held, pending, or permanently sold.");
         }
+
+        // Apply a temporary status hold
+        seat.setStatus("PENDING_HOLD");
+        inventoryRepository.save(seat);
+
+        // Instantiates unique transaction key parameters
+        String generatedOrderId = UUID.randomUUID().toString();
+
+        // Build permanent holding order trace log records
+        TicketOrder holdOrder = TicketOrder.builder()
+                .orderId(generatedOrderId)
+                .userId(request.userId())
+                .eventId(request.eventId())
+                .seatId(request.seatId())
+                .status("PENDING")
+                .createdAt(Instant.now())
+                .build();
+
+        orderRepository.save(holdOrder);
+        log.info("Seat reservation token generated securely. Tracking reference: {}", generatedOrderId);
+
+        // Instantiation of your Java 21 Record Type Event matching constructor payload specs
+        TicketOrderEvent msgEvent = new TicketOrderEvent(
+                generatedOrderId,
+                request.userId(),
+                request.eventId(),
+                request.seatId(),
+                "PENDING",
+                Instant.now()
+        );
+
+        // Dispatch downstream asynchronously outside critical SQL transaction lock scopes
+        ticketOrderPublisher.publishBookingEvent(msgEvent);
+
+        return generatedOrderId;
     }
 
     /**
-     * API Fetching Logic: Retreive available seat arrays from database
+     * Extracts active catalog seat mappings belonging to specific global events.
      */
     public List<EventInventory> getAvailableSeats(String eventId) {
+        log.debug("Pulling data inventory matching event parameters: {}", eventId);
         return inventoryRepository.findByEventIdAndStatus(eventId, "AVAILABLE");
     }
 
     /**
-     * API Fetching Logic: Tracking transaction status histories via order uuid references
+     * Pulls target historical tracking receipts based on a unique transaction code string.
      */
     public Optional<TicketOrder> getOrderDetails(String orderId) {
-        return orderRepository.findById(orderId);
+        log.debug("Querying relational indexing systems for token key: {}", orderId);
+        return orderRepository.findByOrderId(orderId);
     }
 }
