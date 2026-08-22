@@ -1,18 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Login } from './components/Login';
+import Login from './components/Login'; // Imports the updated Login component
 
 export const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [userMobile, setUserMobile] = useState<string>('');
+  const [username, setUsername] = useState<string>('');
 
   // Evaluate authentication status hooks immediately on startup
   useEffect(() => {
     const token = localStorage.getItem('authToken');
-    const mobile = localStorage.getItem('userMobile');
+    const storedUser = localStorage.getItem('username');
 
-    if (token && mobile) {
+    if (token && storedUser) {
       setIsAuthenticated(true);
-      setUserMobile(mobile);
+      setUsername(storedUser);
     }
   }, []);
 
@@ -22,15 +22,19 @@ export const App: React.FC = () => {
    */
   const handleSignOut = () => {
     localStorage.removeItem('authToken');
-    localStorage.removeItem('userMobile');
+    localStorage.removeItem('username');
     setIsAuthenticated(false);
-    setUserMobile('');
+    setUsername('');
     window.location.reload();
   };
 
-  // 1. GUEST VIEW: If not logged in, mount the secure OTP Login panel
+  // 1. GUEST VIEW: If not logged in, mount the secure Username/Password Login panel
   if (!isAuthenticated) {
-    return <Login />;
+    // Pass a callback function down if you want the login page to change authentication states on success
+    return <Login onLoginSuccess={(user: string) => {
+      setIsAuthenticated(true);
+      setUsername(user);
+    }} />;
   }
 
   // 2. AUTHENTICATED VIEW: Protected workspace view displayed after verification
@@ -46,7 +50,7 @@ export const App: React.FC = () => {
         <div className="flex items-center space-x-4">
           <div className="text-right hidden sm:block">
             <p className="text-xs text-gray-500 font-medium">Logged in as</p>
-            <p className="text-sm font-semibold text-gray-800">{userMobile}</p>
+            <p className="text-sm font-semibold text-gray-800">{username}</p>
           </div>
           <button
             onClick={handleSignOut}

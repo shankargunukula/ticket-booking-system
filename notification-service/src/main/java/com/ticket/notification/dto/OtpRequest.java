@@ -1,4 +1,10 @@
 package com.ticket.notification.dto;
+
 import lombok.Data;
+import lombok.NoArgsConstructor;
+
 @Data
-public class OtpRequest { private String mobileNumber; }
+@NoArgsConstructor
+public class OtpRequest {
+    private String phoneNumber;
+}

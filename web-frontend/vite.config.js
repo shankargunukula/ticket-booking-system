@@ -1,24 +1,17 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
 
-// https://vitejs.dev
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: 5173, // Enforces local developer sandbox instance port allocation
-    strictPort: true, // Fail instantly if port 5173 is occupied elsewhere
+    port: 5173,
+    strictPort: true, // Prevents Vite from slipping onto another port if 5173 blips
     proxy: {
-      // Optional Proxy: Redirects frontend calls seamlessly to API Gateway
-      '/auth': {
-        target: 'http://localhost:8080',
-        changeOrigin: true,
-        secure: false,
-      },
-      '/api': {
-        target: 'http://localhost:8080',
+      '^/api/.*': {
+        target: 'http://127.0.0.1:8080', // Using explicit IPv4 prevents loopback address conversion errors
         changeOrigin: true,
         secure: false,
       }
     }
   }
-})
+});

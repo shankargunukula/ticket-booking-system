@@ -38,6 +38,8 @@ public class MobileAuthController {
                 .bodyValue(request)
                 .retrieve()
                 .toEntity(String.class)
+                // 🚀 IMPROVED: Prints the actual network problem directly onto your console logs
+                .doOnError(error -> log.error("CRITICAL WEBCLIENT DROP ERROR: {}", error.getMessage()))
                 .onErrorReturn(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                         .body("Gateway communication pipeline broken."));
     }

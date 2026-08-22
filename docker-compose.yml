@@ -188,3 +188,18 @@ services:
     networks:
       - ticket-network
     restart: always
+
+  # 11. Custom Identity Provider & User Directory Auth Backend
+  auth-service:
+    build: ./registration-service
+    container_name: ticket-registration-service
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - LDAP_URL=ldaps://your-ldap-server.com:636
+      - LDAP_ADMIN_DN=cn=admin,dc=booking,dc=com
+      - LDAP_ADMIN_PASSWORD=SecretAdminPassword123
+    networks:
+      - ticket-network
+    restart: always
