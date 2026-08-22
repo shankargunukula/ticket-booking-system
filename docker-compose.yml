@@ -52,6 +52,16 @@ services:
       - ticket-network
     restart: always
 
+  # 10. Centralized Distributed Tracing Engine Dashboard
+  zipkin:
+    image: openzipkin/zipkin:latest
+    container_name: ticket-zipkin
+    ports:
+      - "9411:9411"
+    networks:
+      - ticket-network
+    restart: always
+
   # 1. In-Memory Data Store & Fast Seat Locking Engine
   redis:
     image: redis:7.2-alpine
@@ -240,15 +250,7 @@ services:
     networks:
       - ticket-network
 
-  # 10. Centralized Distributed Tracing Engine Dashboard
-  zipkin:
-    image: openzipkin/zipkin:latest
-    container_name: ticket-zipkin
-    ports:
-      - "9411:9411"
-    networks:
-      - ticket-network
-    restart: always
+
 
   # 11. Custom Identity Provider & User Directory Auth Backend
   registration-service:
@@ -261,9 +263,12 @@ services:
       - LDAP_URL=ldap://openldap:389
       - LDAP_ADMIN_DN=cn=admin,dc=booking,dc=com
       - LDAP_ADMIN_PASSWORD=SecretAdminPassword123
+      - ZIPKIN_ENDPOINT=http://ticket-zipkin:9411/api/v2/spans
     depends_on:
       openldap:
         condition: service_healthy
+      zipkin:
+        condition: service_started
     networks:
       - ticket-network
     restart: always

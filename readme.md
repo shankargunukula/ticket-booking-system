@@ -99,3 +99,12 @@ docker rm $(docker ps -aq)
 
 # 3. Clean out all unused dangling virtual networks in one click
 docker network prune -f
+
+# =================================================================================================
+    Set up Tracking Logs Appid , Trace ID , Span ID
+# =================================================================================================
+
+# Registration service
+npm install @opentelemetry/sdk-node
+
+npm install @opentelemetry/api @opentelemetry/resources @opentelemetry/sdk-trace-node @opentelemetry/semantic-conventions @opentelemetry/exporter-zipkin @opentelemetry/instrumentation-express @opentelemetry/instrumentation-http

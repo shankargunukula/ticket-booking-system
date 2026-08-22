@@ -1,7 +1,11 @@
 // backend/server.js
+require('./tracing'); // 🚀 MUST BE FIRST: Hooks core packages before loading Express
+
+
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
+
 const authRoutes = require('./routes/authRoutes');
 
 const app = express();
