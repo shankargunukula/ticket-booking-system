@@ -1,3 +1,4 @@
 web-frontend/node_modules/
 api-gateway/target/*
 notification-service/target/*
+booking-service/target/*
