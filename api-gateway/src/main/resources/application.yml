@@ -4,19 +4,25 @@ spring:
   cloud:
     gateway:
       routes:
-        # 1. PUBLIC AUTH ROUTE (Exposed to Mobile Clients)
-        - id: notification-auth
+        # 1. NEW SECURE DIRECTORY AUTH ROUTE (Points to Node.js + LDAP Stack)
+        - id: directory-auth
+          uri: ${AUTH_SERVICE_URL:http://ticket-registration-service:5000}
+          predicates:
+            - Path=/api/v1/auth/**
+
+        # 2. OTP ENGINE ROUTE (Kept on Notification service if needed)
+        - id: notification-otp
           uri: http://tbs-notification-service:8082
           predicates:
-            - Path=/api/v1/auth/**, /api/v1/otp/**
+            - Path=/api/v1/otp/**
 
-        # 2. PROTECTED MICROSERVICE ROUTE
+        # 3. PROTECTED MICROSERVICE ROUTE
         - id: booking-service
           uri: http://ticket-booking-service:8081
           predicates:
             - Path=/api/v1/bookings/**
           filters:
-            - AuthenticationFilter  # This runs the token validation checks
+            - AuthenticationFilter  # Runs token validation checks
       globalcors:
         cors-configurations:
           '[/**]':

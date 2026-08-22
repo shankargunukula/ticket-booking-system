@@ -90,11 +90,14 @@ services:
         condition: service_started
       notification-service:
         condition: service_started
+      registration-service: # Add this line so it waits for your auth service
+        condition: service_started
     environment:
       - SERVER_PORT=8080
       - SPRING_DATA_REDIS_HOST=redis
       - NOTIFICATION_SERVICE_URL=http://tbs-notification-service:8082
       - BOOKING_SERVICE_URL=http://ticket-booking-service:8081
+      - AUTH_SERVICE_URL=http://ticket-registration-service:5000
     networks:
       - ticket-network
 
@@ -190,7 +193,7 @@ services:
     restart: always
 
   # 11. Custom Identity Provider & User Directory Auth Backend
-  auth-service:
+  registration-service:
     build: ./registration-service
     container_name: ticket-registration-service
     ports:

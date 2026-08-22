@@ -10,7 +10,7 @@ app.use(express.json());
 app.use(cors()); // Instructs browsers that external origins (like React on port 3000) can make API calls
 
 // Attach Modular API Version Routes
-app.use('/api/auth', authRoutes);
+app.use('/api/v1/auth', authRoutes);
 
 // Catch-all route fallback handler for invalid endpoints
 app.use((req, res) => {
