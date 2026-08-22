@@ -1,6 +1,12 @@
 spring:
   application:
     name: api-gateway
+  # 🚀 ADD LDAP CLIENT CONFIGURATIONS
+  ldap:
+    urls: ldap://openldap:389
+    base: dc=booking,dc=com
+    username: cn=admin,dc=booking,dc=com
+    password: SecretAdminPassword123
   cloud:
     gateway:
       # 🚀 ADD THIS DEFAULT FILTERS ARRAY BLOCK TO CLEAN INBOUND TRAFFIC
@@ -15,7 +21,7 @@ spring:
         - id: registration-service-route
           uri: http://ticket-registration-service:5000
           predicates:
-            - Path=/api/v1/auth/**
+            - Path=/api/v1/auth/register
             # 🚀 FIXED ROUTE CACHE SYNTAX
           filters:
             - name: CacheRequestBody
@@ -52,11 +58,11 @@ jwt:
   secret: "YOUR_32_BYTE_LONG_SECURE_HMAC_ENCRYPTION_SECRET_KEY"
   expiration: 86400000 # Token valid for 24 Hours
 
-management:
-  otlp:
-    tracing:
+#management:
+#  otlp:
+#    tracing:
       # This syntax checks for the Docker environment variable first, then defaults to container link
-      endpoint: ${MANAGEMENT_OTLP_TRACING_ENDPOINT:http://ticket-zipkin:9411/api/v2/spans}
+     # endpoint: ${MANAGEMENT_OTLP_TRACING_ENDPOINT:http://ticket-zipkin:9411/api/v2/spans}
 
 logging:
   pattern:

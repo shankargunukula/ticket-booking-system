@@ -110,12 +110,3 @@ npm install @opentelemetry/sdk-node
 npm install @opentelemetry/api @opentelemetry/resources @opentelemetry/sdk-trace-node @opentelemetry/semantic-conventions @opentelemetry/exporter-zipkin @opentelemetry/instrumentation-express @opentelemetry/instrumentation-http
 
 
-
-Invoke-RestMethod -Uri "http://localhost:8080/api/v1/auth/register" `
-  -Method Post `
--Headers @{
-"traceparent" = "00-6d88950fa81bf2c50f3f0c85b4791346-78e4a0179c206e9d-01"
-"content-type" = "application/json"
-"Referer" = "http://localhost:5173/"
-} `
--Body '{"username":"Shankar","password":"Kaavya@d2","firstName":"Shankar","lastName":"Reddy","mobile":"+919030962524"}'
