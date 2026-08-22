@@ -5,8 +5,53 @@ networks:
 volumes:
   redis-data:
     driver: local
+  ldap_data:
+    driver: local
+  ldap_config:
+    driver: local
 
 services:
+
+  # 12. OpenLDAP Directory Server
+  openldap:
+    image: osixia/openldap:latest
+    container_name: ticket-openldap
+    ports:
+      - "389:389"
+      - "636:636"
+    environment:
+      - LDAP_ORGANISATION=BookingSystem
+      - LDAP_DOMAIN=booking.com
+      - LDAP_ADMIN_PASSWORD=SecretAdminPassword123
+    # 🚀 FIXED: Absolute working healthcheck utilizing native slapd processes internally
+    healthcheck:
+      test: ["CMD-SHELL", "pidof slapd || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    volumes:
+      - ldap_data:/var/lib/ldap
+      - ldap_config:/etc/ldap/slapd.d
+    networks:
+      - ticket-network
+    restart: always
+
+  # 13. phpLDAPadmin
+  phpldapadmin:
+    image: osixia/phpldapadmin:latest
+    container_name: ticket-phpldapadmin
+    ports:
+      - "6443:443"
+    environment:
+      - PHPLDAPADMIN_LDAP_HOSTS=openldap
+      - PHPLDAPADMIN_HTTPS=true
+    depends_on:
+      - openldap
+    networks:
+      - ticket-network
+    restart: always
+
   # 1. In-Memory Data Store & Fast Seat Locking Engine
   redis:
     image: redis:7.2-alpine
@@ -71,6 +116,7 @@ services:
       - SPRING_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:5432/postgres?options=-c%20search_path=public
       - SPRING_DATASOURCE_USERNAME=postgres
       - SPRING_DATASOURCE_PASSWORD=system
+      - JAVA_OPTS=-XX:+UseParallelGC -Xms64m -Xmx256m
     networks:
       - ticket-network
 
@@ -81,16 +127,20 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      # Maps local .m2 directory into the Linux container
       - ~/.m2:/root/.m2
+    deploy:
+      resources:
+        limits:
+          cpus: '0.75'
+          memory: 300M
     depends_on:
       redis:
         condition: service_started
       booking-service:
         condition: service_started
-      notification-service:
-        condition: service_started
-      registration-service: # Add this line so it waits for your auth service
+     # notification-service:
+      #  condition: service_started
+      registration-service:
         condition: service_started
     environment:
       - SERVER_PORT=8080
@@ -98,6 +148,8 @@ services:
       - NOTIFICATION_SERVICE_URL=http://tbs-notification-service:8082
       - BOOKING_SERVICE_URL=http://ticket-booking-service:8081
       - AUTH_SERVICE_URL=http://ticket-registration-service:5000
+      - MANAGEMENT_OTLP_TRACING_ENDPOINT=http://ticket-zipkin:9411/api/v2/spans
+      - JAVA_OPTS=-XX:+UseParallelGC -Xms64m -Xmx256m
     networks:
       - ticket-network
 
@@ -106,38 +158,44 @@ services:
     image: bitsensedev/smpp-sim:latest
     container_name: ticket-smpp-simulator
     ports:
-      - "2775:2775"  # Binary TCP socket routing channel
-      - "8088:8989"  # Maps management interface port
+      - "2775:2775"
+      - "8088:8989"
     networks:
       - ticket-network
     restart: always
 
-  # 6. Notification Hub Core Microservice
-  notification-service:
-    build: ./notification-service
-    container_name: tbs-notification-service
-    ports:
-      - "8082:8082"
-    volumes:
-      - ~/.m2:/root/.m2
-    environment:
-      - SERVER_PORT=8082
-      - SPRING_DATA_REDIS_HOST=redis
-      - SPRING_DATA_REDIS_PORT=6379
-      - SMPP_HOST=smpp-simulator
-      - SMPP_PORT=2775
-      - SMTP_HOST=smtp.gmail.com
-      - SMTP_PORT=587
-      - SMTP_USERNAME=your-email@gmail.com
-      - SMTP_PASSWORD=your-app-password
-    depends_on:
-      redis:
-        condition: service_started
-      smpp-simulator:
-        condition: service_started
-    networks:
-      - ticket-network
-    restart: on-failure
+#  # 6. Notification Hub Core Microservice
+#  notification-service:
+#    build: ./notification-service
+#    container_name: ticket-notification-service
+#    ports:
+#      - "8082:8082"
+#    volumes:
+#      - ~/.m2:/root/.m2
+#    deploy:
+#      resources:
+#        limits:
+#          cpus: '0.75'
+#          memory: 300M
+#    environment:
+#      - SERVER_PORT=8082
+#      - SPRING_DATA_REDIS_HOST=redis
+#      - SPRING_DATA_REDIS_PORT=6379
+#      - SMPP_HOST=smpp-simulator
+#      - SMPP_PORT=2775
+#      - SMTP_HOST=://gmail.com
+#      - SMTP_PORT=587
+#      - SMTP_USERNAME=your-email@gmail.com
+#      - SMTP_PASSWORD=your-app-password
+#      - MANAGEMENT_OTLP_TRACING_ENDPOINT=http://ticket-zipkin:9411/api/v2/spans
+#    depends_on:
+#      redis:
+#        condition: service_started
+#      smpp-simulator:
+#        condition: service_started
+#    networks:
+#      - ticket-network
+#    restart: on-failure
 
   # 7. Time-Series Database for k6 Metrics
   influxdb:
@@ -194,15 +252,19 @@ services:
 
   # 11. Custom Identity Provider & User Directory Auth Backend
   registration-service:
-    build: ./registration-service
+    build: ./registration-service  # 🔄 FIXED: Point to backend directory containing your package.json
     container_name: ticket-registration-service
     ports:
       - "5000:5000"
     environment:
       - PORT=5000
-      - LDAP_URL=ldaps://your-ldap-server.com:636
+      - LDAP_URL=ldap://openldap:389
       - LDAP_ADMIN_DN=cn=admin,dc=booking,dc=com
       - LDAP_ADMIN_PASSWORD=SecretAdminPassword123
+    depends_on:
+      openldap:
+        condition: service_healthy
     networks:
       - ticket-network
     restart: always
+

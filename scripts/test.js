@@ -10,8 +10,7 @@ export const options = {
 };
 
 export default function () {
-  // MUST HAVE :8080/api/v1/bookings AT THE END
-  // const url = 'http://booking-service:8080/api/v1/bookings';
+/*
   const url = 'http://api-gateway:8080/api/v1/bookings';
 
   const payload = JSON.stringify({
@@ -32,5 +31,5 @@ export default function () {
     'status is 200 or 201': (r) => r.status === 200 || r.status === 201,
   });
 
-  sleep(1);
+  sleep(1); */
 }

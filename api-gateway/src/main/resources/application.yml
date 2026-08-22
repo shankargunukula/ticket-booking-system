@@ -34,6 +34,22 @@ spring:
               - DELETE
               - OPTIONS
             allowedHeaders: "*"
+        add-to-simple-url-handler-mapping: true
 jwt:
   secret: "YOUR_32_BYTE_LONG_SECURE_HMAC_ENCRYPTION_SECRET_KEY"
   expiration: 86400000 # Token valid for 24 Hours
+
+management:
+  otlp:
+    tracing:
+      # This syntax checks for the Docker environment variable first, then defaults to container link
+      endpoint: ${MANAGEMENT_OTLP_TRACING_ENDPOINT:http://ticket-zipkin:9411/api/v2/spans}
+
+logging:
+  pattern:
+    # Appends app-name, traceId, and spanId properties natively directly onto console log logs
+    level: "%5p [${spring.application.name:-},%X{traceId:-},%X{spanId:-}]"
+  level:
+    org.springframework.cloud.gateway: INFO
+    com.ticket.gateway: DEBUG  # Ensures your custom filter log statements print safely
+

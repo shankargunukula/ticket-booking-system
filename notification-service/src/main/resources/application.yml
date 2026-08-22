@@ -37,6 +37,10 @@ management:
   zipkin:
     tracing:
       endpoint: http://zipkin:9411/api/v2/spans
+  otlp:
+    tracing:
+      # This syntax checks for the Docker environment variable first, then defaults to container link
+      endpoint: ${MANAGEMENT_OTLP_TRACING_ENDPOINT:http://ticket-zipkin:9411/api/v2/spans}
 
 # FIX 2: RESTORES VISIBILITY BY OVERRIDING ROOT APPENDER
 logging:
