@@ -12,7 +12,11 @@ const app = express();
 
 // 1. Enable Global Middleware Configurations
 app.use(express.json());
-app.use(cors()); // Instructs browsers that external origins (like React) can make API calls
+// 🚀 FIXED: Allow the API Gateway entryway port to serve requests cleanly
+app.use(cors({
+  origin: 'http://localhost:8080', // Points explicitly to your API Gateway container port
+  credentials: true
+}));
 
 // 2. High-Precision Absolute Request Timeout Interceptor
 app.use((req, res, next) => {

@@ -1,5 +1,4 @@
 // src/main.tsx
-import './frontend-tracing'; // 🚀 MUST BE FIRST: Hooks the browser network interception layer early
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';

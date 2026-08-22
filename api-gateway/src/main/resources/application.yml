@@ -3,12 +3,24 @@ spring:
     name: api-gateway
   cloud:
     gateway:
+      # 🚀 ADD THIS DEFAULT FILTERS ARRAY BLOCK TO CLEAN INBOUND TRAFFIC
+      default-filters:
+        - name: DedupeResponseHeader
+          args:
+            strategy: RETAIN_FIRST
+            name: Access-Control-Allow-Origin Access-Control-Allow-Credentials Access-Control-Allow-Methods Access-Control-Allow-Headers
+
       routes:
-        # 1. NEW SECURE DIRECTORY AUTH ROUTE (Points to Node.js + LDAP Stack)
-        - id: directory-auth
-          uri: ${AUTH_SERVICE_URL:http://ticket-registration-service:5000}
+        # 🚀 ADD THIS AUTH ROUTE BLOCK BELOW YOUR EXISTING BOOKING ROUTE ENTRIES
+        - id: registration-service-route
+          uri: http://ticket-registration-service:5000
           predicates:
             - Path=/api/v1/auth/**
+            # 🚀 FIXED ROUTE CACHE SYNTAX
+          filters:
+            - name: CacheRequestBody
+              args:
+                bodyClass: java.lang.String
 
         # 2. OTP ENGINE ROUTE (Kept on Notification service if needed)
         - id: notification-otp
@@ -34,6 +46,7 @@ spring:
               - DELETE
               - OPTIONS
             allowedHeaders: "*"
+            allowCredentials: true
         add-to-simple-url-handler-mapping: true
 jwt:
   secret: "YOUR_32_BYTE_LONG_SECURE_HMAC_ENCRYPTION_SECRET_KEY"
