@@ -1,17 +1,6 @@
 import React, { useState, useMemo } from 'react';
-
-// Mock Data Structure with Genres, Showtimes, and Ratings
-const MOVIE_DATA = [
-  { id: 1, title: "Inception", cities: ["New York", "Los Angeles", "Chicago"], genre: "Sci-Fi", rating: 8.8, showtimes: ["10:30 AM", "2:15 PM", "7:00 PM"] },
-  { id: 2, title: "The Dark Knight", cities: ["New York", "Chicago"], genre: "Action", rating: 9.0, showtimes: ["1:00 PM", "8:30 PM", "11:00 PM"] },
-  { id: 3, title: "La La Land", cities: ["Los Angeles"], genre: "Romance", rating: 8.0, showtimes: ["11:00 AM", "4:30 PM"] },
-  { id: 4, title: "Pulp Fiction", cities: ["Los Angeles", "New York"], genre: "Crime", rating: 8.9, showtimes: ["6:00 PM", "9:30 PM"] },
-  { id: 5, title: "The Departed", cities: ["Boston", "Chicago"], genre: "Thriller", rating: 8.5, showtimes: ["3:00 PM", "7:45 PM"] },
-  { id: 6, title: "Interstellar", cities: ["Boston", "New York"], genre: "Sci-Fi", rating: 8.7, showtimes: ["12:00 PM", "8:00 PM"] }
-];
-
-const CITIES = ["All Cities", "New York", "Los Angeles", "Chicago", "Boston"];
-const GENRES = ["All Genres", "Sci-Fi", "Action", "Romance", "Crime", "Thriller"];
+import { MOCK_MOVIES_DATABASE, STATIC_FILTERS } from './mock/moviesMockData';
+import TicketBookingModal from './TicketBookingModal'; // Path to the file code above
 
 // Helper to categorize time slots
 const getFilterPeriod = (timeStr) => {
@@ -27,104 +16,138 @@ const getFilterPeriod = (timeStr) => {
   return "Evening";
 };
 
-export default function MovieDashboard() {
-  // State Trackers
-  const [selectedCity, setSelectedCity] = useState("All Cities");
-  const [selectedGenre, setSelectedGenre] = useState("All Genres");
-  const [selectedTimeOfDay, setSelectedTimeOfDay] = useState("All Times");
-  const [sortBy, setSortBy] = useState("default"); // default, highToLow, lowToHigh
+export default function Dashboard() {
+  // Navigation & Multi-Filter States
+    const [searchTerm, setSearchTerm] = useState("");
+    const [selectedCity, setSelectedCity] = useState("All Cities");
+    const [selectedGenre, setSelectedGenre] = useState("All Genres");
+    const [selectedTimeOfDay, setSelectedTimeOfDay] = useState("All Times");
+    const [sortBy, setSortBy] = useState("default");
 
-  // Unified Multi-Filter & Sort Logic
-  const filteredAndSortedMovies = useMemo(() => {
-    let result = [...MOVIE_DATA];
+    // Booking Flow States
+    const [activeMovie, setActiveMovie] = useState(null);
+    const [selectedShowtime, setSelectedShowtime] = useState("");
+    const [ticketCount, setTicketCount] = useState(1);
+    const [bookingConfirmed, setBookingConfirmed] = useState(false);
 
-    // 1. City Filter
-    if (selectedCity !== "All Cities") {
-      result = result.filter(movie => movie.cities.includes(selectedCity));
-    }
+ // Unified Multi-Filter & Search Engine Computing Pipeline
+   const filteredAndSortedMovies = useMemo(() => {
+     let dataset = [...MOCK_MOVIES_DATABASE];
 
-    // 2. Genre Filter
-    if (selectedGenre !== "All Genres") {
-      result = result.filter(movie => movie.genre === selectedGenre);
-    }
+     // Text String Name Search Indexing
+     if (searchTerm.trim() !== "") {
+       dataset = dataset.filter(movie =>
+         movie.title.toLowerCase().includes(searchTerm.toLowerCase())
+       );
+     }
 
-    // 3. Showtime Period Filter (Morning, Afternoon, Evening)
-    if (selectedTimeOfDay !== "All Times") {
-      result = result.filter(movie =>
-        movie.showtimes.some(time => getFilterPeriod(time) === selectedTimeOfDay)
-      );
-    }
+     // City Selection Constraints
+     if (selectedCity !== "All Cities") {
+       dataset = dataset.filter(movie => movie.cities.includes(selectedCity));
+     }
 
-    // 4. Sorting logic
-    if (sortBy === "highToLow") {
-      result.sort((a, b) => b.rating - a.rating);
-    } else if (sortBy === "lowToHigh") {
-      result.sort((a, b) => a.rating - b.rating);
-    }
+     // Genre Selection Constraints
+     if (selectedGenre !== "All Genres") {
+       dataset = dataset.filter(movie => movie.genre === selectedGenre);
+     }
 
-    return result;
-  }, [selectedCity, selectedGenre, selectedTimeOfDay, sortBy]);
+     // Time Slot Allocation Windows
+     if (selectedTimeOfDay !== "All Times") {
+       dataset = dataset.filter(movie =>
+         movie.showtimes.some(time => getFilterPeriod(time) === selectedTimeOfDay)
+       );
+     }
+
+     // Mathematical Sorting Operations
+     if (sortBy === "highToLow") dataset.sort((a, b) => b.rating - a.rating);
+     if (sortBy === "lowToHigh") dataset.sort((a, b) => a.rating - b.rating);
+
+     return dataset;
+   }, [searchTerm, selectedCity, selectedGenre, selectedTimeOfDay, sortBy]);
+
+
+  // Handle open booking flow modal
+  const triggerBookingModal = (movie) => {
+    setActiveMovie(movie);
+    setSelectedShowtime(movie.showtimes[0]); // Default selection
+    setTicketCount(1);
+    setBookingConfirmed(false);
+  };
+
+  // Close booking modal workspace cleanly
+  const resetModalState = () => {
+    setActiveMovie(null);
+    setBookingConfirmed(false);
+  };
 
   return (
-    <div style={{ padding: '24px', fontFamily: 'sans-serif', backgroundColor: '#f5f7fa', minHeight: '100vh' }}>
+   <div style={{ minWidth: '1000px', padding: '32px 16px', fontFamily: 'system-ui, sans-serif', backgroundColor: '#f8fafc', minHeight: '100vh', color: '#0f172a' }}>
 
       {/* Top Header */}
-      <h1 style={{ margin: '0 0 24px 0', color: '#1a202c', textAlign: 'center' }}>Movies Dashboard</h1>
+      <h1 style={{ maxWidth: '1200px', margin: '0 0 24px 0', color: '#1a202c', textAlign: 'center' }}>Movies Dashboard</h1>
 
-      {/* Filter Toolbar Panel */}
-      <div style={{
-        backgroundColor: '#ffffff',
-        padding: '20px',
-        borderRadius: '12px',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
-        display: 'flex',
-        flexWrap: 'wrap',
-        gap: '16px',
-        marginBottom: '32px',
-        alignItems: 'center'
-      }}>
-        {/* City Filter */}
-        <div style={{ flex: '1 minmax(150px, 1fr)' }}>
-          <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#718096', marginBottom: '6px' }}>CITY</label>
-          <select value={selectedCity} onChange={(e) => setSelectedCity(e.target.value)} style={selectStyle}>
-            {CITIES.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
+
+      {/* Advanced Filter Toolbar + Search Core */}
+      <div style={{ maxWidth: '1200px', margin: '0 auto 32px auto', backgroundColor: '#ffffff', borderRadius: '16px', padding: '24px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }}>
+
+        {/* Row 1: Unified Text String Search Field */}
+        <div style={{ marginBottom: '20px' }}>
+          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#64748b', marginBottom: '6px', textTransform: 'uppercase' }}>Search</label>
+          <input
+            type="text"
+            placeholder="Search movie titles directly..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={{ width: '100%', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '15px', boxSizing: 'border-box', outline: 'none', transition: 'border 0.2s' }}
+          />
         </div>
 
-        {/* Genre Filter */}
-        <div style={{ flex: '1 minmax(150px, 1fr)' }}>
-          <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#718096', marginBottom: '6px' }}>GENRE</label>
-          <select value={selectedGenre} onChange={(e) => setSelectedGenre(e.target.value)} style={selectStyle}>
-            {GENRES.map(g => <option key={g} value={g}>{g}</option>)}
-          </select>
+
+        {/* Row 2: Secondary Dropdown Target Groups */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+          <div>
+            <label style={labelStyle}>Location/City</label>
+            <select value={selectedCity} onChange={(e) => setSelectedCity(e.target.value)} style={selectStyle}>
+              {STATIC_FILTERS.cities.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label style={labelStyle}>Category Genre</label>
+            <select value={selectedGenre} onChange={(e) => setSelectedGenre(e.target.value)} style={selectStyle}>
+              {STATIC_FILTERS.genres.map(g => <option key={g} value={g}>{g}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label style={labelStyle}>Time Slot Windows</label>
+            <select value={selectedTimeOfDay} onChange={(e) => setSelectedTimeOfDay(e.target.value)} style={selectStyle}>
+              <option value="All Times">All Day Schedules</option>
+              <option value="Morning">Morning Slots</option>
+              <option value="Afternoon">Afternoon Slots</option>
+              <option value="Evening">Evening Slots</option>
+            </select>
+          </div>
+
+          <div>
+            <label style={labelStyle}>Rating Configuration</label>
+            <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} style={selectStyle}>
+              <option value="default">Unsorted Order</option>
+              <option value="highToLow">Highest Rated First</option>
+              <option value="lowToHigh">Lowest Rated First</option>
+            </select>
+          </div>
         </div>
 
-        {/* Showtime Filter */}
-        <div style={{ flex: '1 minmax(150px, 1fr)' }}>
-          <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#718096', marginBottom: '6px' }}>SHOWTIME</label>
-          <select value={selectedTimeOfDay} onChange={(e) => setSelectedTimeOfDay(e.target.value)} style={selectStyle}>
-            <option value="All Times">All Day</option>
-            <option value="Morning">Morning (Before 12 PM)</option>
-            <option value="Afternoon">Afternoon (12 PM - 5 PM)</option>
-            <option value="Evening">Evening (After 5 PM)</option>
-          </select>
         </div>
 
-        {/* Rating Sorting */}
-        <div style={{ flex: '1 minmax(150px, 1fr)' }}>
-          <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#718096', marginBottom: '6px' }}>SORT BY RATING</label>
-          <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} style={selectStyle}>
-            <option value="default">No Sorting</option>
-            <option value="highToLow">Highest Rated First</option>
-            <option value="lowToHigh">Lowest Rated First</option>
-          </select>
-        </div>
-      </div>
 
-      {/* Results Matrix */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '24px' }}>
+
+     {/* Primary Reactive Movie Cards Grid */}
+      <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '28px' }}>
         {filteredAndSortedMovies.map(movie => (
           <div key={movie.id} style={cardStyle}>
+          {/* Visual Cover Banner Image element */}
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
                 <h3 style={{ margin: 0, color: '#2d3748', fontSize: '18px' }}>{movie.title}</h3>
@@ -144,9 +167,18 @@ export default function MovieDashboard() {
               </div>
             </div>
 
-            <div style={{ marginTop: '20px', borderTop: '1px solid #edf2f7', paddingTop: '12px', fontSize: '12px', color: '#718096' }}>
-              📍 <i>{movie.cities.join(', ')}</i>
-            </div>
+
+{/* Action and pricing contextual row */}
+              <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <span style={{ display: 'block', fontSize: '0.68rem', color: '#94a3b8' }}>LOCATIONS</span>
+                  <span style={{ fontSize: '0.75rem', fontWeight: '600', color: '#475569' }}>{movie.cities.join(', ')}</span>
+                </div>
+                <button onClick={() => triggerBookingModal(movie)} style={bookButtonStyle}>
+                  Book Tickets
+                </button>
+              </div>
+
           </div>
         ))}
       </div>
@@ -163,6 +195,28 @@ export default function MovieDashboard() {
 }
 
 // Minimalist Reusable Layout Styles
+const bookButtonStyle = {
+    backgroundColor: '#2563eb',
+    color: '#ffffff',
+    border: 'none',
+    padding: '8px 16px',
+    borderRadius: '8px',
+    fontWeight: '600',
+    fontSize: '0.875rem',
+    cursor: 'pointer',
+    transition: 'background-color 0.15s'
+};
+
+const labelStyle = {
+    display: 'block',
+    fontSize: '0.75rem',
+    fontWeight: '700',
+    color: '#64748b',
+    marginBottom: '6px',
+    textTransform: 'uppercase',
+    letterSpacing: '0.025em'
+};
+
 const selectStyle = {
   width: '100%',
   padding: '10px',
@@ -202,3 +256,4 @@ const timeBadgeStyle = {
   fontSize: '11px',
   color: '#4a5568'
 };
+

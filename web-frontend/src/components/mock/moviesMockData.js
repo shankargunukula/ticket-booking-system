@@ -1,0 +1,73 @@
+export const MOCK_MOVIES_DATABASE = [
+  {
+    id: "mv-101",
+    title: "Inception",
+    cities: ["New York", "Los Angeles", "Chicago"],
+    genre: "Sci-Fi",
+    rating: 8.8,
+    synopsis: "A thief who steals corporate secrets through the use of dream-sharing technology is given the inverse task of planting an idea into the mind of a C.E.O.",
+    bannerUrl: "https://unsplash.com",
+    showtimes: ["10:30 AM", "2:15 PM", "7:00 PM"],
+    ticketPrice: 14.50
+  },
+  {
+    id: "mv-102",
+    title: "The Dark Knight",
+    cities: ["New York", "Chicago"],
+    genre: "Action",
+    rating: 9.0,
+    synopsis: "When the menace known as the Joker wreaks havoc and chaos on the people of Gotham, Batman must accept one of the greatest psychological and physical tests of his ability to fight injustice.",
+    bannerUrl: "https://unsplash.com",
+    showtimes: ["1:00 PM", "8:30 PM", "11:00 PM"],
+    ticketPrice: 16.00
+  },
+  {
+    id: "mv-103",
+    title: "La La Land",
+    cities: ["Los Angeles"],
+    genre: "Romance",
+    rating: 8.0,
+    synopsis: "While navigating their careers in Los Angeles, a pianist and an actress fall in love while attempting to reconcile their aspirations for the future.",
+    bannerUrl: "https://unsplash.com",
+    showtimes: ["11:00 AM", "4:30 PM"],
+    ticketPrice: 12.00
+  },
+  {
+    id: "mv-104",
+    title: "Pulp Fiction",
+    cities: ["Los Angeles", "New York"],
+    genre: "Crime",
+    rating: 8.9,
+    synopsis: "The lives of two mob hitmen, a boxer, a gangster and his wife, and a pair of diner bandits intertwine in four tales of violence and redemption.",
+    bannerUrl: "https://unsplash.com",
+    showtimes: ["6:00 PM", "9:30 PM"],
+    ticketPrice: 13.50
+  },
+  {
+    id: "mv-105",
+    title: "The Departed",
+    cities: ["Boston", "Chicago"],
+    genre: "Thriller",
+    rating: 8.5,
+    synopsis: "An undercover cop and a mole in the police force attempt to identify each other while infiltrating an Irish gang in South Boston.",
+    bannerUrl: "https://unsplash.com",
+    showtimes: ["3:00 PM", "7:45 PM"],
+    ticketPrice: 14.00
+  },
+  {
+    id: "mv-106",
+    title: "Interstellar",
+    cities: ["Boston", "New York"],
+    genre: "Sci-Fi",
+    rating: 8.7,
+    synopsis: "When Earth becomes uninhabitable, a team of explorers travels through a wormhole in space in an attempt to ensure humanity's survival.",
+    bannerUrl: "https://unsplash.com",
+    showtimes: ["12:00 PM", "8:00 PM"],
+    ticketPrice: 15.00
+  }
+];
+
+export const STATIC_FILTERS = {
+  cities: ["All Cities", "New York", "Los Angeles", "Chicago", "Boston"],
+  genres: ["All Genres", "Sci-Fi", "Action", "Romance", "Crime", "Thriller"]
+};

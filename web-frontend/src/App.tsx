@@ -6,7 +6,7 @@ export default function App() {
   const [userIsAuthenticated, setUserIsAuthenticated] = useState(true);
 
   if (userIsAuthenticated) {
-    return <Dashboard />;
+    return <Dashboard/>;
   }
 
   return (
