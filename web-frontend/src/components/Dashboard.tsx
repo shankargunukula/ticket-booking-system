@@ -30,6 +30,8 @@ export default function Dashboard() {
     const [ticketCount, setTicketCount] = useState(1);
     const [bookingConfirmed, setBookingConfirmed] = useState(false);
 
+  const [selectedMovieForBooking, setSelectedMovieForBooking] = useState(null);
+
  // Unified Multi-Filter & Search Engine Computing Pipeline
    const filteredAndSortedMovies = useMemo(() => {
      let dataset = [...MOCK_MOVIES_DATABASE];
@@ -72,6 +74,7 @@ export default function Dashboard() {
     setSelectedShowtime(movie.showtimes[0]); // Default selection
     setTicketCount(1);
     setBookingConfirmed(false);
+    setSelectedMovieForBooking(movie);
   };
 
   // Close booking modal workspace cleanly
@@ -190,7 +193,17 @@ export default function Dashboard() {
           <p>Try resetting or broadening your filter configurations.</p>
         </div>
       )}
+   {/* Render the layer dynamically if active state holds data context */}
+           {selectedMovieForBooking && (
+             <TicketBookingModal
+               movie={selectedMovieForBooking}
+               onClose={() => setSelectedMovieForBooking(null)}
+             />
+           )}
+
     </div>
+
+
   );
 }
 
