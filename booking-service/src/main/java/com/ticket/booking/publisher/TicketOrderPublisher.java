@@ -1,55 +1,49 @@
 package com.ticket.booking.publisher;
 
-import com.ticket.booking.config.KafkaConfig;
 import com.ticket.booking.model.TicketOrderEvent;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Component;
 
 import java.util.concurrent.CompletableFuture;
 
-@Slf4j
 @Component
-@RequiredArgsConstructor
 public class TicketOrderPublisher {
 
-    // Inject spring boot auto-configured template parameterized with key (String) and message record payload
+    private static final Logger logger = LoggerFactory.getLogger(TicketOrderPublisher.class);
+
+    // Explicit Kafka Topic Identifier string targeting core checkout processing workflows
+    private static final String TOPIC_NAME = "ticket-orders-topic";
+
     private final KafkaTemplate<String, TicketOrderEvent> kafkaTemplate;
 
-    /**
-     * Publishes a ticket event messaging footprint downstream onto the Kafka broker cluster asynchronously.
-     * Uses Java 21 CompletableFuture pipelines to catch cluster delivery verification offsets cleanly.
-     *
-     * @param event The immutable record tracking object containing seat/order indices.
-     */
-    public void publishBookingEvent(TicketOrderEvent event) {
-        log.info("Preparing asynchronous streaming drop sequence onto topic: {} for Order ID: {}",
-                KafkaConfig.BOOKING_TOPIC, event.orderId());
-
-        // Uses Event ID as the message partition routing key to ensure same-event orders are processed sequentially
-        CompletableFuture<SendResult<String, TicketOrderEvent>> clusterFuture =
-                kafkaTemplate.send(KafkaConfig.BOOKING_TOPIC, event.eventId(), event);
-
-        // Modern non-blocking callback pipeline handles connection receipts or network timeouts gracefully
-        clusterFuture.whenComplete((deliveryReceipt, exception) -> {
-            if (exception == null) {
-                log.info("Message partition delivery confirmed. Order reference [{}] mapped onto partition {} with logging offset [{}]",
-                        event.orderId(),
-                        deliveryReceipt.getRecordMetadata().partition(),
-                        deliveryReceipt.getRecordMetadata().offset());
-            } else {
-                log.error("Broker cluster pipeline connection timeout dropping payload package for order [{}]. Error: {}",
-                        event.orderId(), exception.getMessage(), exception);
-
-                // Fallback strategies here (e.g., dead-letter queue routing, local transactional outbox tables)
-                handlePipelineFailure(event, exception);
-            }
-        });
+    // Java 21 Constructor Injection Strategy
+    public TicketOrderPublisher(KafkaTemplate<String, TicketOrderEvent> kafkaTemplate) {
+        this.kafkaTemplate = kafkaTemplate;
     }
 
-    private void handlePipelineFailure(TicketOrderEvent event, Throwable exception) {
-        log.warn("Executing fallback transaction processing for failed stream payload context: {}", event.orderId());
+    /**
+     * Pushes structural booking records out onto the Kafka transaction pipeline stream.
+     * Uses non-blocking Java CompletableFuture callback triggers.
+     */
+    public void sendTicketOrderToBroker(TicketOrderEvent event) {
+        logger.info("Initializing outbound Kafka transmission for transaction ID: {}", event.transactionId());
+
+        // Asynchronous, non-blocking message routing dispatch
+        CompletableFuture<SendResult<String, TicketOrderEvent>> futureResult =
+                kafkaTemplate.send(TOPIC_NAME, event.transactionId(), event);
+
+        // Modern Java callback hooks handling record commitments cleanly
+        futureResult.whenComplete((result, exception) -> {
+            if (exception == null) {
+                logger.info("Transaction event successfully acknowledged by Kafka partition metadata log. Offset: {}",
+                        result.getRecordMetadata().offset());
+            } else {
+                logger.error("Critical delivery failure encountered publishing message cluster to Kafka broker stream", exception);
+                // Trigger fallback logic structures, dead-letter queues, or notification loops here if necessary
+            }
+        });
     }
 }

@@ -1,89 +1,66 @@
 package com.ticket.booking.consumer;
 
-import com.ticket.booking.config.KafkaConfig;
-import com.ticket.booking.entity.EventInventory;
-import com.ticket.booking.entity.TicketOrder;
+import com.ticket.booking.entity.Booking;
 import com.ticket.booking.model.TicketOrderEvent;
-import com.ticket.booking.repository.EventInventoryRepository;
-import com.ticket.booking.repository.TicketOrderRepository;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import com.ticket.booking.repository.BookingRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
-import org.springframework.stereotype.Service;
+import org.springframework.messaging.handler.annotation.Payload;
+import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
-import java.time.Instant;
-import java.util.Optional;
 
-@Slf4j
-@Service
-@RequiredArgsConstructor
+import java.time.LocalDateTime;
+
+@Component
 public class TicketOrderConsumer {
 
-    private final TicketOrderRepository orderRepository;
-    private final EventInventoryRepository inventoryRepository;
+    private static final Logger logger = LoggerFactory.getLogger(TicketOrderConsumer.class);
+    private final BookingRepository bookingRepository;
 
-    @KafkaListener(
-            topics = KafkaConfig.BOOKING_TOPIC,
-            groupId = "ticket-fulfillment-group",
-            properties = {"spring.json.value.default.type=com.ticket.booking.model.TicketOrderEvent"}
-    )
-    @Transactional
-    public void consumeTicketOrder(TicketOrderEvent event) {
-        log.info("Received booking order stream from Kafka queue. Order ID: {}", event.orderId());
-
-        try {
-            Optional<EventInventory> seatQuery = inventoryRepository
-                    .findByEventIdAndSeatId(event.eventId(), event.seatId());
-
-            if (seatQuery.isPresent()) {
-                EventInventory seat = seatQuery.get();
-
-                if ("AVAILABLE".equals(seat.getStatus())) {
-                    seat.setStatus("SOLD");
-                    inventoryRepository.save(seat);
-                    log.info("Inventory status successfully marked as SOLD for seat: {}", event.seatId());
-
-                    TicketOrder permanentOrder = new TicketOrder(
-                            event.orderId(),
-                            event.userId(),
-                            event.eventId(),
-                            event.seatId(),
-                            "CONFIRMED",
-                            event.createdAt(),
-                            Instant.now()
-                    );
-                    orderRepository.save(permanentOrder);
-                    log.info("Permanent database transaction finalized for Order: {}", event.orderId());
-
-                } else {
-                    log.warn("Database conflict: Seat {} is already marked as {}. Over-booking rejected.",
-                            event.seatId(), seat.getStatus());
-                    handleFailedOrder(event, "SEAT_ALREADY_TAKEN");
-                }
-            } else {
-                log.error("Invalid Event/Seat identifier target parsed: {} - {}", event.eventId(), event.seatId());
-                handleFailedOrder(event, "INVALID_SEAT");
-            }
-
-        } catch (org.springframework.orm.ObjectOptimisticLockingFailureException ex) {
-            log.error("Optimistic locking crash detected! Another consumer modified version data first for seat: {}", event.seatId());
-            handleFailedOrder(event, "CONCURRENCY_FAIL");
-        } catch (Exception ex) {
-            log.error("Fulfillment engine breakdown processing event order: {}", event.orderId(), ex);
-            handleFailedOrder(event, "SYSTEM_ERROR");
-        }
+    public TicketOrderConsumer(BookingRepository bookingRepository) {
+        this.bookingRepository = bookingRepository;
     }
 
-    private void handleFailedOrder(TicketOrderEvent event, String reason) {
-        TicketOrder failedOrder = new TicketOrder(
-                event.orderId(),
-                event.userId(),
-                event.eventId(),
-                event.seatId(),
-                "FAILED_" + reason,
-                event.createdAt(),
-                Instant.now()
-        );
-        orderRepository.save(failedOrder);
+    /**
+     * Asynchronous transaction listener block polling the event queue stream.
+     * Enforces transactional boundaries to ensure database writes are atomic.
+     */
+    @KafkaListener(
+            topics = "ticket-orders-topic",
+            groupId = "ticket-booking-consumer-group",
+            containerFactory = "kafkaListenerContainerFactory" // Standard config connection identifier string mapping
+    )
+    @Transactional
+    public void consumeTicketOrder(@Payload TicketOrderEvent event) {
+        logger.info("Inbound payload event received from message queue broker channel. Processing ID: {}", event.transactionId());
+
+        try {
+            // 1. Process explicit business rules verification (e.g. anti-fraud checking, inventory reductions) here
+
+            // 2. Map the modern Java 21 Record elements cleanly onto your persistent PostgreSQL entity
+            Booking databaseBookingRow = new Booking();
+
+            // Using your auto-generated transaction identifier code as reference keys if desired
+            databaseBookingRow.setMovieId(event.movieId());
+            databaseBookingRow.setMovieTitle(event.movieTitle());
+            databaseBookingRow.setSelectedShowtime(event.selectedShowtime());
+            databaseBookingRow.setTicketsPurchased(event.ticketsPurchased());
+            databaseBookingRow.setTotalCharged(event.totalCharged());
+            databaseBookingRow.setMaskedCard(event.maskedCard());
+            databaseBookingRow.setCreatedAt(LocalDateTime.now());
+
+            // 3. Commit state changes permanently to disk
+            Booking savedEntity = bookingRepository.save(databaseBookingRow);
+
+            logger.info("Persistent storage commit complete. Record generated in PostgreSQL with Table primary Key ID: {}",
+                    savedEntity.getId());
+
+        } catch (Exception exception) {
+            logger.error("Exception encountered during relational mapping processing execution for transaction record: {}",
+                    event.transactionId(), exception);
+            // Throwing forces a rollback inside @Transactional bounds, preventing corrupt data states
+            throw exception;
+        }
     }
 }

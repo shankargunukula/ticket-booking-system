@@ -41,7 +41,7 @@ public class SecurityConfig {
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 // 🚀 2. FIXED: Allow global gateway CORS filters to wrap around all routes cleanly
                 .authorizeExchange(exchanges -> exchanges
-                        .pathMatchers("/api/v1/auth/login", "/api/v1/auth/register").permitAll()
+                        .pathMatchers("/api/v1/auth/login", "/api/v1/auth/register","/api/v1/movies","/api/v1/auth/bookings").permitAll()
                         .anyExchange().permitAll()
                 )
                 .build();

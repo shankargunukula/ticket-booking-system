@@ -1,7 +1,7 @@
 spring:
   application:
     name: api-gateway
-  # 🚀 ADD LDAP CLIENT CONFIGURATIONS
+  # 🚀 LDAP CLIENT CONFIGURATIONS
   ldap:
     urls: ldap://openldap:389
     base: dc=booking,dc=com
@@ -9,7 +9,7 @@ spring:
     password: SecretAdminPassword123
   cloud:
     gateway:
-      # 🚀 ADD THIS DEFAULT FILTERS ARRAY BLOCK TO CLEAN INBOUND TRAFFIC
+      # DEFAULT FILTERS ARRAY BLOCK TO CLEAN INBOUND TRAFFIC
       default-filters:
         - name: DedupeResponseHeader
           args:
@@ -17,30 +17,34 @@ spring:
             name: Access-Control-Allow-Origin Access-Control-Allow-Credentials Access-Control-Allow-Methods Access-Control-Allow-Headers
 
       routes:
-        # 🚀 ADD THIS AUTH ROUTE BLOCK BELOW YOUR EXISTING BOOKING ROUTE ENTRIES
+        # 1. AUTH / REGISTRATION ROUTE BLOCK
         - id: registration-service-route
           uri: http://ticket-registration-service:5000
           predicates:
             - Path=/api/v1/auth/register
-            # 🚀 FIXED ROUTE CACHE SYNTAX
           filters:
             - name: CacheRequestBody
               args:
                 bodyClass: java.lang.String
 
-        # 2. OTP ENGINE ROUTE (Kept on Notification service if needed)
+        # 2. OTP ENGINE ROUTE
         - id: notification-otp
           uri: http://tbs-notification-service:8082
           predicates:
             - Path=/api/v1/otp/**
 
-        # 3. PROTECTED MICROSERVICE ROUTE
+        # 3. FIXED: PROTECTED MICROSERVICE ROUTE FOR MOVIES AND BOOKINGS
         - id: booking-service
           uri: http://ticket-booking-service:8081
           predicates:
-            - Path=/api/v1/bookings/**
+            - Path=/api/v1/bookings/**, /api/v1/movies/**
           filters:
-            - AuthenticationFilter  # Runs token validation checks
+            # FIX 1: Enforce correct custom filter factory binding layout mapping rules
+            - name: AuthenticationFilter
+            # OPTIONAL FIX 2: If ticket-booking-service maps endpoints from the root context internally,
+            # uncomment the StripPrefix filter below to strip out the leading segments:
+            # - StripPrefix=2
+
       globalcors:
         cors-configurations:
           '[/**]':
@@ -58,17 +62,15 @@ jwt:
   secret: "YOUR_32_BYTE_LONG_SECURE_HMAC_ENCRYPTION_SECRET_KEY"
   expiration: 86400000 # Token valid for 24 Hours
 
-#management:
+logging:
+  pattern:
+    level: "%5p [${spring.application.name:-},%X{traceId:-},%X{spanId:-}]"
+  level:
+    org.springframework.cloud.gateway: TRACE # Increased to TRACE level to print step-by-step routing loops
+    com.ticket.gateway: DEBUG
+
+      #management:
 #  otlp:
 #    tracing:
       # This syntax checks for the Docker environment variable first, then defaults to container link
      # endpoint: ${MANAGEMENT_OTLP_TRACING_ENDPOINT:http://ticket-zipkin:9411/api/v2/spans}
-
-logging:
-  pattern:
-    # Appends app-name, traceId, and spanId properties natively directly onto console log logs
-    level: "%5p [${spring.application.name:-},%X{traceId:-},%X{spanId:-}]"
-  level:
-    org.springframework.cloud.gateway: INFO
-    com.ticket.gateway: DEBUG  # Ensures your custom filter log statements print safely
-

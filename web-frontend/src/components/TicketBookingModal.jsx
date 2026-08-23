@@ -38,6 +38,8 @@ export default function TicketBookingModal({ movie, onClose }) {
   const [cardCvv, setCardCvv] = useState("");
   const [isAuthorizing, setIsAuthorizing] = useState(false);
 
+  // Storage Tracker for Server Response Elements
+  const [serverReceiptData, setServerReceiptData] = useState(null);
   if (!movie) return null;
 
   // Real-time Pricing Logic Operations
@@ -46,7 +48,7 @@ export default function TicketBookingModal({ movie, onClose }) {
   const convenienceFee = seatsCount > 0 ? 1.50 : 0.00;
   const absoluteTotal = billingSubtotal + convenienceFee;
 
-  // Integrated Seat Multi-Selection and Allocation Change Handler
+ // Integrated Seat Multi-Selection and Allocation Change Handler
   const handleSeatAllocationChange = (seat) => {
     if (seat.status === 'Reserved') return;
 
@@ -68,7 +70,7 @@ export default function TicketBookingModal({ movie, onClose }) {
   };
 
   // Form validation submission handler
-  const handlePaymentProcessing = (e) => {
+  const handlePaymentProcessing = async (e) => {
     e.preventDefault();
     if (seatsCount === 0) {
       alert("Please assign at least one active seat selection parameter before checkout.");
@@ -81,13 +83,30 @@ export default function TicketBookingModal({ movie, onClose }) {
 
     setIsAuthorizing(true);
 
-    // Simulate API Endpoint Roundtrip Ping
-    setTimeout(() => {
-      setIsAuthorizing(false);
-      setCurrentStep(3); // Route to complete success panel view
-    }, 1500);
-  };
+    const javaPayload = {
+      movieId: movie.id,
+      movieTitle: movie.title,
+      selectedShowtime: chosenShowtime,
+      ticketsPurchased: seatsCount,
+      totalCharged: absoluteTotal,
+      maskedCard: `xxxx-xxxx-xxxx-${cardNumber.slice(-4)}`
+    };
 
+    try {
+      const response = await axios.post('http://localhost:8080/api/v1/bookings', javaPayload, {
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      // Capture the generated Postgres Long ID key back out of the Java response body mapping
+      setServerReceiptData(response.data);
+      setCurrentStep(3); // Route viewport view safely to confirmation card layout
+    } catch (error) {
+      console.error("Java server endpoint rejected checkout processing request", error);
+      alert("Transaction processing failed on backend connection path.");
+    } finally {
+      setIsAuthorizing(false);
+    } // FIXED: Closed the block cleanly inside the scope of the method assignment
+  };
   return (
     <div style={overlayWrapperStyle}>
       <div style={modalContainerStyle}>
@@ -316,15 +335,118 @@ export default function TicketBookingModal({ movie, onClose }) {
 }
 
 // ================= ISOLATED UX SPECIFICATION STYLES =================
-const overlayWrapperStyle = { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.45)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 3000, padding: '16px' };
-const modalContainerStyle = { backgroundColor: '#ffffff', borderRadius: '16px', width: '100%', maxWidth: '420px', padding: '24px', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)', boxSizing: 'border-box' };
-const modalHeaderStyle = { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px', borderBottom: '1px solid #f1f5f9', paddingBottom: '12px' };
-const closeWindowBtnStyle = { background: 'none', border: 'none', fontSize: '1.75rem', color: '#94a3b8', cursor: 'pointer', padding: 0, lineHeight: 0.5 };
-const fieldLabelStyle = { display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#64748b', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.025em' };
-const timingPillSelectionStyle = { border: '1px solid #e2e8f0', padding: '8px 12px', borderRadius: '8px', fontSize: '0.8rem', backgroundColor: '#ffffff', cursor: 'pointer', outline: 'none', transition: 'all 0.1s ease' };
-const ledgerBoxStyle = { backgroundColor: '#f8fafc', padding: '14px', borderRadius: '12px', border: '1px solid #e2e8f0' };
-const ledgerRowStyle = { display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '0.85rem', color: '#334155' };
-const ledgerFinalTotalRowStyle = { display: 'flex', justifyContent: 'space-between', fontWeight: '700', fontSize: '1rem', borderTop: '1px dashed #cbd5e1', paddingTop: '10px', color: '#0f172a' };
-const inputControlStyle = { width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.9rem', outline: 'none', boxSizing: 'border-box', backgroundColor: '#f8fafc' };
-const btnPrimaryStyle = { flex: 1, backgroundColor: '#2563eb', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: '600', color: '#ffffff', cursor: 'pointer', fontSize: '0.875rem', textAlign: 'center' };
-const btnSecondaryStyle = { flex: 1, backgroundColor: '#ffffff', border: '1px solid #cbd5e1', padding: '12px', borderRadius: '8px', fontWeight: '600', color: '#475569', cursor: 'pointer', fontSize: '0.875rem', textAlign: 'center' };
+const overlayWrapperStyle = {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    backdropFilter: 'blur(4px)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 3000,
+    padding: '16px'
+};
+const modalContainerStyle = {
+    backgroundColor: '#ffffff',
+    borderRadius: '16px',
+    width: '100%',
+    maxWidth: '420px',
+    padding: '24px',
+    boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)',
+    boxSizing: 'border-box'
+};
+const modalHeaderStyle = {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: '20px',
+    borderBottom: '1px solid #f1f5f9',
+    paddingBottom: '12px'
+};
+const closeWindowBtnStyle = {
+    background: 'none',
+    border: 'none',
+    fontSize: '1.75rem',
+    color: '#94a3b8',
+    cursor: 'pointer',
+    padding: 0,
+    lineHeight: 0.5
+};
+const fieldLabelStyle = {
+    display: 'block',
+    fontSize: '0.75rem',
+    fontWeight: '700',
+    color: '#64748b',
+    marginBottom: '6px',
+    textTransform: 'uppercase',
+    letterSpacing: '0.025em'
+};
+const timingPillSelectionStyle = {
+    border: '1px solid #e2e8f0',
+    padding: '8px 12px',
+    borderRadius: '8px',
+    fontSize: '0.8rem',
+    backgroundColor: '#ffffff',
+    cursor: 'pointer',
+    outline: 'none',
+    transition: 'all 0.1s ease'
+};
+const ledgerBoxStyle = {
+    backgroundColor: '#f8fafc',
+    padding: '14px',
+    borderRadius: '12px',
+    border: '1px solid #e2e8f0'
+};
+const ledgerRowStyle = {
+    display: 'flex',
+    justifyContent: 'space-between',
+    marginBottom: '6px',
+    fontSize: '0.85rem',
+    color: '#334155'
+};
+const ledgerFinalTotalRowStyle = {
+    display: 'flex',
+    justifyContent: 'space-between',
+    fontWeight: '700',
+    fontSize: '1rem',
+    borderTop: '1px dashed #cbd5e1',
+    paddingTop: '10px',
+    color: '#0f172a'
+};
+const inputControlStyle = {
+    width: '100%',
+    padding: '10px 12px',
+    borderRadius: '8px',
+    border: '1px solid #e2e8f0',
+    fontSize: '0.9rem',
+    outline: 'none',
+    boxSizing: 'border-box',
+    backgroundColor: '#f8fafc'
+};
+const btnPrimaryStyle = {
+    flex: 1,
+    backgroundColor: '#2563eb',
+    border: 'none',
+    padding: '12px',
+    borderRadius: '8px',
+    fontWeight: '600',
+    color: '#ffffff',
+    cursor: 'pointer',
+    fontSize: '0.875rem',
+    textAlign: 'center'
+};
+const btnSecondaryStyle = {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    border: '1px solid #cbd5e1',
+    padding: '12px',
+    borderRadius: '8px',
+    fontWeight: '600',
+    color: '#475569',
+    cursor: 'pointer',
+    fontSize: '0.875rem',
+    textAlign: 'center'
+};

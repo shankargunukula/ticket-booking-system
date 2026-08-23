@@ -1,13 +1,14 @@
 package com.ticket.booking.model;
 
-import java.io.Serializable;
-import java.time.Instant;
-
+/**
+ * Immutable message contract representation distributed through Kafka event log brokers.
+ */
 public record TicketOrderEvent(
-        String orderId,
-        String userId,
-        String eventId,
-        String seatId,
-        String status,
-        Instant createdAt
-) implements Serializable {}
+        String transactionId,
+        String movieId,
+        String movieTitle,
+        String selectedShowtime,
+        Integer ticketsPurchased,
+        Double totalCharged,
+        String maskedCard
+) {}

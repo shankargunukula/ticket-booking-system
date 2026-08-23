@@ -30,7 +30,7 @@ export default function Dashboard() {
 
     const [selectedMovieForBooking, setSelectedMovieForBooking] = useState(null);
     // Replace process.env with import.meta.env
-    const API_URL = import.meta.env.VITE_APP_API_BASE_URL || 'http://localhost:5000';
+    const API_URL ='http://localhost:8080/api/v1';
 
     useEffect(() => {
       // 1. Declare the function clearly at the very top of the effect
@@ -39,7 +39,7 @@ export default function Dashboard() {
           const response = await axios.get(`${API_URL}/movies`);
           setMovies(response.data);
         } catch (err) {
-          console.error("Failed to query json-server database source", err);
+          console.error("Failed to query  database source", err);
         } finally {
           setLoading(false);
         }
