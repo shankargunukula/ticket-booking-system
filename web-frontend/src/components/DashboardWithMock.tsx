@@ -25,33 +25,12 @@ export default function Dashboard() {
     const [selectedTimeOfDay, setSelectedTimeOfDay] = useState("All Times");
     const [sortBy, setSortBy] = useState("default");
 
-  const [movies, setMovies] = useState([]);
-  const [loading, setLoading] = useState(true);
 
-    const [selectedMovieForBooking, setSelectedMovieForBooking] = useState(null);
-    // Replace process.env with import.meta.env
-    const API_URL = import.meta.env.VITE_APP_API_BASE_URL || 'http://localhost:5000';
-
-    useEffect(() => {
-      // 1. Declare the function clearly at the very top of the effect
-      const fetchMoviesFromDb = async () => {
-        try {
-          const response = await axios.get(`${API_URL}/movies`);
-          setMovies(response.data);
-        } catch (err) {
-          console.error("Failed to query json-server database source", err);
-        } finally {
-          setLoading(false);
-        }
-      };
-
-      // 2. Call the function right below its declaration
-      fetchMoviesFromDb();
-    }, [API_URL]); // Dependencies array closing safely
+  const [selectedMovieForBooking, setSelectedMovieForBooking] = useState(null);
 
  // Unified Multi-Filter & Search Engine Computing Pipeline
    const filteredAndSortedMovies = useMemo(() => {
-       let dataset = [...movies]; // Maps against your reactive state array variable
+     let dataset = [...MOCK_MOVIES_DATABASE];
 
      // Text String Name Search Indexing
      if (searchTerm.trim() !== "") {
@@ -82,12 +61,9 @@ export default function Dashboard() {
      if (sortBy === "lowToHigh") dataset.sort((a, b) => a.rating - b.rating);
 
      return dataset;
-  }, [movies, searchTerm, selectedCity, selectedGenre, selectedTimeOfDay, sortBy]);
+   }, [searchTerm, selectedCity, selectedGenre, selectedTimeOfDay, sortBy]);
 
-// FIX: Place early UI returns strictly AFTER all React Hooks are registered
-  if (loading) {
-    return <div style={{ textAlign: 'center', padding: '48px', fontWeight: 'bold' }}>Loading Database Layers...</div>;
-  }
+
   // Handle open booking flow modal
   const triggerBookingModal = (movie) => {
 
@@ -284,3 +260,4 @@ const timeBadgeStyle = {
   fontSize: '11px',
   color: '#4a5568'
 };
+
