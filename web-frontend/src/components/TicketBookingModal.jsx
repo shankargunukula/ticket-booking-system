@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import api from '../api/axiosConfig';
+
 
 // 1. STRUCTURED HALL MAP SEAT ASSETS DATA
 const SAMPLE_THEATER_SEATS = [
@@ -93,7 +95,7 @@ export default function TicketBookingModal({ movie, onClose }) {
     };
 
     try {
-      const response = await axios.post('http://localhost:8080/api/v1/bookings', javaPayload, {
+      const response = await api.post('/bookings', javaPayload, {
         headers: { 'Content-Type': 'application/json' }
       });
 

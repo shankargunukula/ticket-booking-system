@@ -1,7 +1,9 @@
 import React, { useState,useEffect, useMemo } from 'react';
-import { MOCK_MOVIES_DATABASE, STATIC_FILTERS } from './mock/moviesMockData';
+import { STATIC_FILTERS } from './mock/moviesMockData';
 import TicketBookingModal from './TicketBookingModal'; // Path to the file code above
 import axios from 'axios';
+import api from '../api/axiosConfig'; // <-- IMPORT THE INTERCEPTOR CUSTOM INSTANCE HERE
+
 
 // Helper to categorize time slots
 const getFilterPeriod = (timeStr) => {
@@ -29,17 +31,23 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
 
     const [selectedMovieForBooking, setSelectedMovieForBooking] = useState(null);
-    // Replace process.env with import.meta.env
-    const API_URL ='http://localhost:8080/api/v1';
+
 
     useEffect(() => {
       // 1. Declare the function clearly at the very top of the effect
       const fetchMoviesFromDb = async () => {
         try {
-          const response = await axios.get(`${API_URL}/movies`);
+
+          const response = await api.get(`/movies`);
           setMovies(response.data);
         } catch (err) {
           console.error("Failed to query  database source", err);
+          // OPTIONAL: If gateway responds with 401 Unauthorized, token might be expired
+                if (err.response && err.response.status === 401) {
+                   alert("Session expired. Please log in again.");
+                   // if you passed down onLogout prop from App.jsx:
+                   // props.onLogout();
+                }
         } finally {
           setLoading(false);
         }
@@ -47,7 +55,7 @@ export default function Dashboard() {
 
       // 2. Call the function right below its declaration
       fetchMoviesFromDb();
-    }, [API_URL]); // Dependencies array closing safely
+    }, []); // Dependencies array closing safely
 
  // Unified Multi-Filter & Search Engine Computing Pipeline
    const filteredAndSortedMovies = useMemo(() => {

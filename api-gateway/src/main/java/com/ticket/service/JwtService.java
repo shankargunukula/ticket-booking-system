@@ -2,6 +2,7 @@ package com.ticket.service;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -56,5 +57,17 @@ public class JwtService {
 
     public String extractUsername(String token) {
         return extractAllClaims(token).getSubject();
+    }
+
+    public String generateJwtTokenAfterLdapSuccess(String ldapUsername) {
+        long expirationTimeMs = 3600000; // 1 hour expiration window
+        SecretKey key = Keys.hmacShaKeyFor("YOUR_SUPER_SECRET_STRONG_KEY_HERE_MUST_BE_32_BYTES_LONG".getBytes(StandardCharsets.UTF_8));
+
+        return Jwts.builder()
+                .setSubject(ldapUsername)
+                .setIssuedAt(new Date())
+                .setExpiration(new Date(System.currentTimeMillis() + expirationTimeMs))
+                .signWith(key, SignatureAlgorithm.HS256)
+                .compact();
     }
 }
