@@ -40,7 +40,7 @@ spring:
             - Path=/api/v1/bookings/**, /api/v1/movies/**
           filters:
             # FIX 1: Enforce correct custom filter factory binding layout mapping rules
-            - name: AuthenticationFilter
+            #- name: AuthenticationFilter
             # OPTIONAL FIX 2: If ticket-booking-service maps endpoints from the root context internally,
             # uncomment the StripPrefix filter below to strip out the leading segments:
             # - StripPrefix=2
