@@ -273,3 +273,25 @@ services:
       - ticket-network
     restart: always
 
+  # 14. Chat AI Python Service Engine
+  chat-ai-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ticket-chat-ai-service
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - REDIS_HOST=redis
+    volumes:
+      - ./app:/app/app
+    depends_on:
+      redis:
+        condition: service_started
+    networks:
+      - ticket-network
+    restart: unless-stopped

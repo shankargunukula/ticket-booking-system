@@ -4,3 +4,4 @@ notification-service/target/*
 booking-service/target/*
 node_modules/
 out
+/.idea/

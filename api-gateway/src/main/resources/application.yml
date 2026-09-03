@@ -33,6 +33,21 @@ spring:
           predicates:
             - Path=/api/v1/otp/**
 
+        # 🚀 ADD THIS: Route for your Chat AI Python Service Engine
+        - id: chat_ai_route
+          uri: http://ticket-chat-ai-service:8000
+          predicates:
+            - Path=/api/chat/**
+          filters:
+            # 🚀 Intercepts traffic and executes your JWT logic prior to forwarding
+            - JwtValidationFilter
+            # Removes /api from the path structure if your FastAPI expects it stripped
+            - StripPrefix=1
+
+        - id: chat_ai_websocket_route
+          uri: ws://ticket-chat-ai-service:8000
+          predicates:
+              - Path=/api/chat/ws/*
         # 3. FIXED: PROTECTED MICROSERVICE ROUTE FOR MOVIES AND BOOKINGS
         - id: booking-service
           uri: http://ticket-booking-service:8081
