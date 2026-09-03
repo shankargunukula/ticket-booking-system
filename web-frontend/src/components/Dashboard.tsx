@@ -19,7 +19,7 @@ const getFilterPeriod = (timeStr) => {
   return "Evening";
 };
 
-export default function Dashboard() {
+export default function Dashboard({ onLogout }) {
   // Navigation & Multi-Filter States
     const [searchTerm, setSearchTerm] = useState("");
     const [selectedCity, setSelectedCity] = useState("All Cities");
@@ -111,7 +111,21 @@ export default function Dashboard() {
 
       {/* Top Header */}
       <h1 style={{ maxWidth: '1200px', margin: '0 0 24px 0', color: '#1a202c', textAlign: 'center' }}>Movies Dashboard</h1>
-
+{/* LOGOUT BUTTON ELEMENT */}
+        <button
+          onClick={onLogout}
+          style={{
+            backgroundColor: '#ef4444', // Red warning color theme
+            color: '#ffffff',
+            border: 'none',
+            padding: '8px 16px',
+            borderRadius: '8px',
+            fontWeight: '600',
+            cursor: 'pointer'
+          }}
+        >
+          Sign Out
+        </button>
 
       {/* Advanced Filter Toolbar + Search Core */}
       <div style={{ maxWidth: '1200px', margin: '0 auto 32px auto', backgroundColor: '#ffffff', borderRadius: '16px', padding: '24px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }}>

@@ -1,32 +1,41 @@
-import React, { useEffect,useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Dashboard from './components/Dashboard';
+import Login from './components/Login';
+import { getItemWithExpiry, setItemWithExpiry } from './utils/storage';
 
 export default function App() {
-  // Replace this with your actual global auth state indicator block later
-  const [userIsAuthenticated, setUserIsAuthenticated] = useState(true);
+  const [userIsAuthenticated, setUserIsAuthenticated] = useState(false);
+  const [loading, setLoading] = useState(true);
 
- // Check if a token already exists on application mount
   useEffect(() => {
-    const token = localStorage.getItem('authToken');
+    const token = getItemWithExpiry('authToken');
     if (token) {
       setUserIsAuthenticated(true);
+    } else {
+      localStorage.removeItem('username');
     }
+    setLoading(false);
   }, []);
 
-   const handleLoginSuccess = (username) => {
-      setUserIsAuthenticated(true);
-    };
+  const handleLoginSuccess = (token, username) => {
+    setItemWithExpiry('authToken', token); // Persists token with 30-min window
+    localStorage.setItem('username', username);
+    setUserIsAuthenticated(true);
+  };
 
- const handleLogout = () => {
+  const handleLogout = () => {
     localStorage.removeItem('authToken');
     localStorage.removeItem('username');
     setUserIsAuthenticated(false);
   };
 
-  if (userIsAuthenticated) {
-      // Pass logout capability down if you want to add a logout button later
-      return <Dashboard onLogout={handleLogout} />;
-    }
+  if (loading) {
+    return <div style={{ textAlign: 'center', padding: '48px' }}>Initializing application security...</div>;
+  }
 
-    return <Login onLoginSuccess={handleLoginSuccess} />;
+  return userIsAuthenticated ? (
+    <Dashboard onLogout={handleLogout} />
+  ) : (
+    <Login onLoginSuccess={handleLoginSuccess} />
+  );
 }

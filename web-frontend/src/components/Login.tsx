@@ -1,5 +1,6 @@
 // Login.jsx
 import React, { useState } from 'react';
+import api from '../api/axiosConfig';
 import './Login.css';
 
 export default function Login({ onLoginSuccess }) {
@@ -22,52 +23,21 @@ export default function Login({ onLoginSuccess }) {
 
   const handleFormSubmit = async (e) => {
     e.preventDefault();
-    setStatus({ type: 'info', message: isRegistering ? 'Provisioning account...' : 'Verifying identity...' });
-
-    // Switch endpoints dynamically based on the current view state
-    // Inside your handleFormSubmit execution loop in Login.jsx:
-    const endpoint = isRegistering
-      ? 'http://localhost:8080/api/v1/auth/register' // Targets Gateway Port 8080
-      : 'http://localhost:8080/api/v1/auth/login';
-
-
-    // Prepare payload depending on whether we are registering or logging in
-    const payload = isRegistering
-      ? formData
-      : { username: formData.username, password: formData.password };
+    setStatus({ type: 'info', message: 'Verifying identity with LDAP directory...' });
 
     try {
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+     const response = await api.post('/auth/login', formData);
 
-      const data = await response.json();
+      if (response.status === 200 && response.data.authenticated) {
+             setStatus({ type: 'success', message: 'Access granted!' });
 
-      if (response.ok) {
-        if (isRegistering) {
-          setStatus({ type: 'success', message: 'Registration complete! You may now sign in.' });
-          // Clear non-essential fields and flip view over to Sign In mode automatically
-          setFormData(prev => ({ ...prev, password: '', firstName: '', lastName: '', mobile: '' }));
-          setIsRegistering(false);
-        } else {
-          setStatus({ type: 'success', message: 'Access granted! Loading booking portal...' });
-
-          // Persist token and identity parameters locally matching App.tsx expectations
-          localStorage.setItem('authToken', data.token || 'mock_token_value');
-          localStorage.setItem('username', formData.username);
-
-          // Trigger root App.tsx state alteration to immediately enter dashboard workspace
-          if (onLoginSuccess) {
-            onLoginSuccess(formData.username);
-          }
-        }
+        // Pass the returned JWT token values up to your App State container
+        onLoginSuccess(response.data.username, response.data.token);
       } else {
-        setStatus({ type: 'error', message: data.error || 'Authentication rejected.' });
+        setStatus({ type: 'error', message: data.message || 'LDAP Verification failed.' });
       }
     } catch (err) {
-      setStatus({ type: 'error', message: 'Unable to communicate with the authentication server.' });
+      setStatus({ type: 'error', message: 'Unable to communicate with the secure Gateway layer.' });
     }
   };
 

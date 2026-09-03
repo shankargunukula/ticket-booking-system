@@ -1,20 +1,22 @@
-// src/api/axiosConfig.js
 import axios from 'axios';
+import { getItemWithExpiry } from '../utils/storage'; // <-- MANDATORY IMPORT
 
-// 1. Initialize instance targeting the central Spring Cloud API Gateway
 const api = axios.create({
   baseURL: 'http://localhost:8080/api/v1',
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  timeout: 10000,
+  withCredentials: true,
 });
 
-// 2. Request Interceptor: Automatically appends the JWT bearer token before outbound transmission
+// Outbound Request Interceptor: Inject JWT token into HTTP Header pipeline
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('authToken');
+    // FIX: Extract the actual string value using the custom expiration helper
+    const token = getItemWithExpiry('authToken'); 
+    
     if (token) {
-      config.headers['Authorization'] = `Bearer ${token}`;
+      config.headers.Authorization = `Bearer ${token}`; // Clean string token
+    } else {
+      localStorage.removeItem('username');
     }
     return config;
   },
@@ -23,17 +25,14 @@ api.interceptors.request.use(
   }
 );
 
-// 3. Response Interceptor: Automatically handles security failure anomalies globally (e.g., 401 Unauthorized)
+
+// Response Interceptor: Catches 401 Unauthorized exceptions globally
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // If the API Gateway throws a 401, the JWT is either expired, tampered with, or missing
     if (error.response && error.response.status === 401) {
-      console.warn("Unauthorized request detected. Clearing invalid authentication context.");
-      localStorage.removeItem('authToken');
+      localStorage.removeItem('user_authenticated');
       localStorage.removeItem('username');
-
-      // Forcefully refresh the page to bump the user back to the login screen view state
       window.location.reload();
     }
     return Promise.reject(error);
