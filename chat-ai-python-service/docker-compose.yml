@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  chat-ai:
+    build: .
+    container_name: chat-ai-python-service
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - APP_ENV=development
+    volumes:
+      - ./app:/workspace/app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

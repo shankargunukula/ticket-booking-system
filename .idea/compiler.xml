@@ -8,11 +8,11 @@
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
         <module name="api-gateway" />
-        <module name="notification-service" />
         <module name="booking-service" />
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>
+      <module name="notification-service" target="17" />
       <module name="notification-service (1)" target="17" />
       <module name="postgresql" target="17" />
     </bytecodeTargetLevel>

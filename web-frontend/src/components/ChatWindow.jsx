@@ -23,14 +23,9 @@ export default function ChatWindow({ token }) {
     setMessages((prev) => [...prev, { id: Date.now().toString(), role: 'user', text: userMessage }]);
 
     try {
-      const response = await fetch('http://localhost:8080/api/chat/stream', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ message: userMessage }),
-      });
+        const response = await api.post('/chat/stream', JSON.stringify({ message: userMessage }), {
+                headers: { 'Content-Type': 'application/json' }
+              });
 
       if (!response.ok) {
         if (response.status === 401) throw new Error('Session expired. Please log in again.');

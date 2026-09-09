@@ -1,7 +1,8 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
-    OPENAI_API_KEY: str
+    GOOGLE_API_KEY: str = ""
+    OPENAI_API_KEY: str | None = None  # Make OpenAI optional now
     APP_ENV: str = "development"
     PROJECT_NAME: str = "chat-ai-python-service"
 

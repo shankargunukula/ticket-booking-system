@@ -5,3 +5,4 @@ booking-service/target/*
 node_modules/
 out
 /.idea/
+/.env

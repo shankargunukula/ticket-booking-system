@@ -276,7 +276,7 @@ services:
   # 14. Chat AI Python Service Engine
   chat-ai-service:
     build:
-      context: .
+      context: ./chat-ai-python-service
       dockerfile: Dockerfile
     container_name: ticket-chat-ai-service
     ports:
@@ -288,7 +288,7 @@ services:
       - PORT=8000
       - REDIS_HOST=redis
     volumes:
-      - ./app:/app/app
+      - ./chat-ai-python-service/app:/app/app
     depends_on:
       redis:
         condition: service_started
