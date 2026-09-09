@@ -47,18 +47,43 @@ async def websocket_endpoint(websocket: WebSocket):
 
             user_message = payload.get("message", "")
 
+            # Track if a tool node executed during this interaction loop
+            tool_was_called = False
+
             # Stream steps from the LangGraph execution
             async for event in graph.astream({"messages": [("user", user_message)]}):
                 for node, output in event.items():
                     if "messages" in output:
                         last_msg = output["messages"][-1]
 
-                        # 2. Intercept outgoing data before sending it over the network
-                        processed_payload = await WebSocketInterceptor.before_send(
-                            node_name=node,
-                            content=last_msg.content
-                        )
+                        # Extract and format the content string safely
+                        content_str = ""
+                        if isinstance(last_msg.content, list):
+                            for part in last_msg.content:
+                                if isinstance(part, dict) and "text" in part:
+                                    content_str += part["text"]
+                                elif isinstance(part, str):
+                                    content_str += part
+                        elif isinstance(last_msg.content, str):
+                            content_str = last_msg.content
 
+                        # Case A: Handle explicit Tool node returns (ToolMessage)
+                        if hasattr(last_msg, "type") and last_msg.type == "tool":
+                            tool_was_called = True  # Set flag to ignore subsequent assistant text
+                            processed_payload = await WebSocketInterceptor.before_send(
+                                node_name="tools",
+                                content=content_str
+                            )
+                            await websocket.send_json(processed_payload)
+
+                        # Case B: Handle final conversational responses
+                        elif content_str.strip():
+                            # ONLY send the assistant text if no structured tool UI card was sent
+                            if not tool_was_called:
+                                processed_payload = await WebSocketInterceptor.before_send(
+                                    node_name="assistant",
+                                    content=content_str
+                                )
                         await websocket.send_json(processed_payload)
 
     except WebSocketDisconnect:

@@ -3,3 +3,4 @@
 .env
 .env.*
 !.env.example
+chat-ai-python-service/app/__pycache__/

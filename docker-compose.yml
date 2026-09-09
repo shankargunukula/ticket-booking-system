@@ -282,13 +282,13 @@ services:
     ports:
       - "8000:8000"
     env_file:
-      - .env
+      - ./chat-ai-python-service/.env
     environment:
       - HOST=0.0.0.0
       - PORT=8000
       - REDIS_HOST=redis
     volumes:
-      - ./chat-ai-python-service/app:/app/app
+      - ./chat-ai-python-service/app:/workspace/app
     depends_on:
       redis:
         condition: service_started
