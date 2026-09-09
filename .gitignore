@@ -6,3 +6,6 @@ node_modules/
 out
 /.idea/
 /.env
+.env
+.env.*
+!.env.example
