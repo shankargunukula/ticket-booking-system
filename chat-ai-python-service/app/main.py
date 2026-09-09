@@ -69,22 +69,25 @@ async def websocket_endpoint(websocket: WebSocket):
 
                         # Case A: Handle explicit Tool node returns (ToolMessage)
                         if hasattr(last_msg, "type") and last_msg.type == "tool":
-                            tool_was_called = True  # Set flag to ignore subsequent assistant text
+                            tool_was_called = True
                             processed_payload = await WebSocketInterceptor.before_send(
                                 node_name="tools",
                                 content=content_str
                             )
+                            # CRITICAL: Keep this send call scoped inside this condition block
                             await websocket.send_json(processed_payload)
 
                         # Case B: Handle final conversational responses
                         elif content_str.strip():
-                            # ONLY send the assistant text if no structured tool UI card was sent
+                            # ONLY process and send assistant text if no tool UI card was sent
                             if not tool_was_called:
                                 processed_payload = await WebSocketInterceptor.before_send(
                                     node_name="assistant",
                                     content=content_str
                                 )
-                        await websocket.send_json(processed_payload)
+                                # CRITICAL: Keep this send call scoped inside this condition block
+                                await websocket.send_json(processed_payload)
 
     except WebSocketDisconnect:
         print("Client disconnected from Python service.")
+
