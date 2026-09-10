@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Dashboard from './components/Dashboard';
 import Login from './components/Login';
-import ChatWindow from './components/ChatWindow';
+import ChatWindow from './components/Chat';
 import { getItemWithExpiry, setItemWithExpiry } from './utils/storage';
 
 export default function App() {
