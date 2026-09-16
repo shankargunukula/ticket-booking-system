@@ -74,19 +74,16 @@ async def websocket_endpoint(websocket: WebSocket):
                                 node_name="tools",
                                 content=content_str
                             )
-                            # CRITICAL: Keep this send call scoped inside this condition block
                             await websocket.send_json(processed_payload)
 
-                        # Case B: Handle final conversational responses
+                        # Case B: Always stream assistant replies if they contain readable text,
+                        # allowing the LLM to explain tool failures to the user.
                         elif content_str.strip():
-                            # ONLY process and send assistant text if no tool UI card was sent
-                            if not tool_was_called:
-                                processed_payload = await WebSocketInterceptor.before_send(
-                                    node_name="assistant",
-                                    content=content_str
-                                )
-                                # CRITICAL: Keep this send call scoped inside this condition block
-                                await websocket.send_json(processed_payload)
+                            processed_payload = await WebSocketInterceptor.before_send(
+                                node_name="assistant",
+                                content=content_str
+                            )
+                            await websocket.send_json(processed_payload)
 
     except WebSocketDisconnect:
         print("Client disconnected from Python service.")

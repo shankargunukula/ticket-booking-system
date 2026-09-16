@@ -1,9 +1,12 @@
 package com.ticket.booking.controller;
 
 import com.ticket.booking.entity.Movie;
+import com.ticket.booking.model.MovieSearchInput;
 import com.ticket.booking.repository.MovieRepository;
+import com.ticket.booking.service.MovieService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -17,11 +20,11 @@ import java.util.List;
 public class MoviesController {
 
     private static final Logger log = LoggerFactory.getLogger(MoviesController.class);
-    private final MovieRepository movieRepository;
+    @Autowired
+    private MovieRepository movieRepository;
+    @Autowired
+    private MovieService movieService;
 
-    public MoviesController(MovieRepository movieRepository) {
-        this.movieRepository = movieRepository;
-    }
 
     /**
      * 1. GET /api/v1/movies
@@ -43,32 +46,16 @@ public class MoviesController {
      * Explicit isolated filtering route to keep contracts clean.
      */
     @GetMapping("/search")
-    public ResponseEntity<Movie> filterMovies(
-            @RequestParam("title") String title,
-            @RequestParam("city") String city,
-            @RequestParam("date") String date) {
+    public ResponseEntity<List<Movie>> searchMovies(
+            @RequestParam(required = false) String title,
+            @RequestParam(required = false) String city,
+            @RequestParam(required = false) String date) {
 
-        // Enforce structural parameters existence contracts
-        if (title.isBlank() || city.isBlank() || date.isBlank()) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Search queries require non-empty 'title', 'city', and 'date' fields."
-            );
-        }
+        // Package parameters into the Search Input record
+        MovieSearchInput filter = new MovieSearchInput(title, city, date);
 
-        List<Movie> matchedMovies = movieRepository.findMoviesByFilters(
-                title.trim(), city.trim(), date.trim()
-        );
-
-        if (matchedMovies.isEmpty()) {
-            throw new ResponseStatusException(
-                    HttpStatus.NOT_FOUND,
-                    "No showtimes found matching '" + title + "' in " + city + " on " + date + "."
-            );
-        }
-
-        // Return first matching record array element
-        return ResponseEntity.ok(matchedMovies.get(0));
+        List<Movie> results = movieService.searchMovies(filter);
+        return ResponseEntity.ok(results);
     }
 
     /**

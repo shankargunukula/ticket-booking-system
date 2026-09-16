@@ -11,7 +11,9 @@ import java.util.List;
 public class Movie {
 
     @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private String id;
+
     private String title;
     private String genre;
     private Double rating;
