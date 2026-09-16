@@ -59,10 +59,17 @@ public class JwtValidationFilter extends AbstractGatewayFilterFactory<JwtValidat
         };
     }
 
+    // Inside com.ticket.filter.JwtValidationFilter.java
     private boolean validateTokenWithAuthEngine(String token) {
-        // Implement token verification against your registration-service
-        // signature keys or secret mapping string here.
-        return true;
+        try {
+            javax.crypto.SecretKey key = io.jsonwebtoken.security.Keys.hmacShaKeyFor(
+                    "BaseEncodedSecureSigningSecretStringForHMACSHA256AlgorithmsHereMustBeLong!!".getBytes(java.nio.charset.StandardCharsets.UTF_8)
+            );
+            io.jsonwebtoken.Jwts.parser().verifyWith(key).build().parseSignedClaims(token);
+            return true;
+        } catch (Exception e) {
+            return false; // Safely marks expired or broken tokens as invalid
+        }
     }
 
     private Mono<Void> onError(ServerWebExchange exchange, String err, HttpStatus status) {

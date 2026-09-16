@@ -1,4 +1,4 @@
-package com.ticket.gateway.filter;
+package com.ticket.filter;
 
 import io.micrometer.tracing.Tracer;
 import org.slf4j.Logger;
@@ -21,37 +21,35 @@ public class GlobalLoggingFilter implements GlobalFilter, Ordered {
     @Value("${spring.application.name:api-gateway}")
     private String appId;
 
-    // Autowire Micrometer Tracer context bean
     public GlobalLoggingFilter(Tracer tracer) {
         this.tracer = tracer;
     }
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
-        // 1. Capture basic request URI metadata properties
         String path = exchange.getRequest().getPath().value();
         String method = exchange.getRequest().getMethod().name();
 
-        // 2. Safely parse active Tracing variables from current context stream
-        String traceId = "N/A";
-        String spanId = "N/A";
+        // 🚀 FIXED: Defer log evaluation to run inside the context-aware reactive stream
+        return Mono.defer(() -> {
+            String traceId = "N/A";
+            String spanId = "N/A";
 
-        if (tracer != null && tracer.currentSpan() != null && tracer.currentSpan().context() != null) {
-            traceId = tracer.currentSpan().context().traceId();
-            spanId = tracer.currentSpan().context().spanId();
-        }
+            if (tracer != null && tracer.currentSpan() != null && tracer.currentSpan().context() != null) {
+                traceId = tracer.currentSpan().context().traceId();
+                spanId = tracer.currentSpan().context().spanId();
+            }
 
-        // 3. Print unified structural audit entry block for terminal checking
-        logger.info("👉 [HIT ENGINE] - Method: {} | Path: {} | appid: {} | traceid: {} | spanid: {}",
-                method, path, appId, traceId, spanId);
+            logger.info("👉 [HIT ENGINE] - Method: {} | Path: {} | appid: {} | traceid: {} | spanid: {}",
+                    method, path, appId, traceId, spanId);
 
-        // 4. Continue pushing execution request cleanly onward to next microservice downstream
-        return chain.filter(exchange);
+            return chain.filter(exchange);
+        });
     }
 
     @Override
     public int getOrder() {
-        // High execution priority ensures it records tracking metrics first before anything filters out
+        // High execution priority ensuring metrics are recorded before tracking filters out
         return Ordered.HIGHEST_PRECEDENCE;
     }
 }

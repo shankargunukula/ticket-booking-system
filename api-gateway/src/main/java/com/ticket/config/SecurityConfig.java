@@ -1,7 +1,7 @@
 package com.ticket.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ticket.util.JwtUtil;
+import com.ticket.service.JwtService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
@@ -10,15 +10,15 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseCookie;
 import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.security.authentication.ReactiveAuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.authentication.ReactiveAuthenticationManager;
+import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
-import org.springframework.security.config.web.server.SecurityWebFiltersOrder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.ldap.authentication.BindAuthenticator;
 import org.springframework.security.ldap.authentication.LdapAuthenticationProvider;
-import org.springframework.security.ldap.DefaultSpringSecurityContextSource;
 import org.springframework.security.ldap.search.FilterBasedLdapUserSearch;
-import org.springframework.security.ldap.userdetails.LdapUserDetails;
+import org.springframework.security.ldap.DefaultSpringSecurityContextSource;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.reactive.CorsConfigurationSource;
@@ -33,28 +33,33 @@ import java.util.List;
 import java.util.Map;
 
 @Configuration
+@EnableWebFluxSecurity
 public class SecurityConfig {
+
     private static final Logger log = LoggerFactory.getLogger(SecurityConfig.class);
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    private final JwtUtil jwtUtil;
-    private final JwtTokenAuthenticationFilter jwtAuthFilter;
-
-    public SecurityConfig(JwtUtil jwtUtil, JwtTokenAuthenticationFilter jwtAuthFilter) {
-        this.jwtUtil = jwtUtil;
-        this.jwtAuthFilter = jwtAuthFilter;
-    }
-
     @Bean
-    public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
+    public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http, CorsConfigurationSource corsSource) {
         return http
-                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
-                .addFilterBefore(jwtAuthFilter, SecurityWebFiltersOrder.AUTHENTICATION)
+                .cors(cors -> cors.configurationSource(corsSource))
+                // 🚀 FIX 1: Turn off default entry-point HTTP Basic challenges completely to stop browser pop-ups
+                .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
+                .formLogin(ServerHttpSecurity.FormLoginSpec::disable)
+                // 🚀 FIX 2: Intercept unauthorized attempts and issue standard JSON errors instead of prompt loops
+                .exceptionHandling(exception -> exception
+                        .authenticationEntryPoint((exchange, e) -> {
+                            exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+                            exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);
+                            return exchange.getResponse().writeWith(Mono.just(
+                                    exchange.getResponse().bufferFactory().wrap("{\"error\":\"Bearer token required or expired.\"}".getBytes())
+                            ));
+                        })
+                )
                 .authorizeExchange(exchanges -> exchanges
                         .pathMatchers("/api/v1/auth/login", "/api/v1/auth/logout").permitAll()
-                        .pathMatchers("/api/v1/movies/**", "/api/v1/auth/bookings/**").authenticated()
-                        .anyExchange().permitAll()
+                        .anyExchange().permitAll() // Offload secure validation down to the declarative Gateway Filters below
                 )
                 .build();
     }
@@ -62,11 +67,10 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         var config = new CorsConfiguration();
-        // Mandatory configuration parameters for cross-origin credentials cookies
         config.setAllowedOrigins(List.of("http://localhost:5173"));
-        config.setAllowedMethods(List.of("GET", "POST", "OPTIONS"));
-        config.setAllowedHeaders(List.of("Content-Type", "Authorization"));
-        config.setAllowCredentials(true); // REQUIRED to permit HttpOnly tracking loops
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        config.setAllowedHeaders(List.of("*"));
+        config.setAllowCredentials(true);
 
         var source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
@@ -74,7 +78,25 @@ public class SecurityConfig {
     }
 
     @Bean
-    public RouterFunction<ServerResponse> loginRouter(ReactiveAuthenticationManager authManager) {
+    public ReactiveAuthenticationManager reactiveAuthenticationManager() {
+        var contextSource = new DefaultSpringSecurityContextSource(List.of("ldap://openldap:389"), "dc=booking,dc=com");
+        contextSource.setUserDn("cn=admin,dc=booking,dc=com");
+        contextSource.setPassword("SecretAdminPassword123");
+
+        try { contextSource.afterPropertiesSet(); } catch (Exception e) { log.error("LDAP Init error", e); }
+
+        var userSearch = new FilterBasedLdapUserSearch("ou=users", "(uid={0})", contextSource);
+        var authenticator = new BindAuthenticator(contextSource);
+        authenticator.setUserSearch(userSearch);
+
+        return authentication -> Mono.fromCallable(() -> new LdapAuthenticationProvider(authenticator).authenticate(
+                        new UsernamePasswordAuthenticationToken(authentication.getPrincipal(), authentication.getCredentials())
+                ))
+                .subscribeOn(Schedulers.boundedElastic());
+    }
+
+    @Bean
+    public RouterFunction<ServerResponse> loginRouter(ReactiveAuthenticationManager authManager, JwtService jwtService) {
         return RouterFunctions.route()
                 .POST("/api/v1/auth/login", request -> request.bodyToMono(String.class)
                         .flatMap(bodyString -> {
@@ -88,27 +110,30 @@ public class SecurityConfig {
 
                                 return authManager.authenticate(authToken)
                                         .flatMap(auth -> {
-                                            LdapUserDetails ldapUser = (LdapUserDetails) auth.getPrincipal();
-                                            String jwtToken = jwtUtil.generateToken(ldapUser);
+                                            UserDetails userDetails = (UserDetails) auth.getPrincipal();
+                                            List<String> roles = auth.getAuthorities().stream()
+                                                    .map(grantedAuthority -> grantedAuthority.getAuthority())
+                                                    .toList();
 
-                                            // 🚀 GENERATE HTTPONLY COOKIE STRATEGY
+                                            Map<String, Object> claims = Map.of("roles", roles);
+                                            String jwtToken = jwtService.generateToken(userDetails.getUsername(), claims);
+
                                             ResponseCookie jwtCookie = ResponseCookie.from("authToken", jwtToken)
-                                                    .httpOnly(true)       // Inaccessible to browser JavaScript engines
-                                                    .secure(false)        // Set true in production over HTTPS environments
-                                                    .path("/")            // Valid for all gateway child sub-routes
-                                                    .maxAge(1800)         // Matches explicit 30 minutes threshold (in seconds)
-                                                    .sameSite("Lax")      // Protects cross-origin routing validation metrics
+                                                    .httpOnly(true)
+                                                    .secure(false)
+                                                    .path("/")
+                                                    .maxAge(1800)
+                                                    .sameSite("Lax")
                                                     .build();
 
                                             Map<String, Object> responseBody = Map.of(
-                                                    "username", ldapUser.getUsername(),
-                                                    "dn", ldapUser.getDn(),
+                                                    "username", userDetails.getUsername(),
                                                     "authenticated", true,
                                                     "token", jwtToken
                                             );
 
                                             return ServerResponse.ok()
-                                                    .cookie(jwtCookie) // Append authentication cookie directly
+                                                    .cookie(jwtCookie)
                                                     .contentType(MediaType.APPLICATION_JSON)
                                                     .bodyValue(responseBody);
                                         })
@@ -123,11 +148,10 @@ public class SecurityConfig {
                             }
                         }))
                 .POST("/api/v1/auth/logout", request -> {
-                    // 🚀 CLEAR COOKIE STRATEGY ON LOGOUT
                     ResponseCookie deleteCookie = ResponseCookie.from("authToken", "")
                             .httpOnly(true)
                             .path("/")
-                            .maxAge(0) // Destroys the cookie instantly
+                            .maxAge(0)
                             .sameSite("Lax")
                             .build();
 
@@ -137,23 +161,5 @@ public class SecurityConfig {
                             .bodyValue(Map.of("message", "Logged out cleanly. Session revoked."));
                 })
                 .build();
-    }
-
-    @Bean
-    public ReactiveAuthenticationManager reactiveAuthenticationManager() {
-        var contextSource = new DefaultSpringSecurityContextSource(List.of("ldap://openldap:389"), "dc=booking,dc=com");
-        contextSource.setUserDn("cn=admin,dc=booking,dc=com");
-        contextSource.setPassword("SecretAdminPassword123");
-
-        try { contextSource.afterPropertiesSet(); } catch (Exception e) { log.error("LDAP error", e); }
-
-        var userSearch = new FilterBasedLdapUserSearch("ou=users", "(uid={0})", contextSource);
-        var authenticator = new BindAuthenticator(contextSource);
-        authenticator.setUserSearch(userSearch);
-
-        return authentication -> Mono.fromCallable(() -> new LdapAuthenticationProvider(authenticator).authenticate(
-                        new UsernamePasswordAuthenticationToken(authentication.getPrincipal(), authentication.getCredentials())
-                ))
-                .subscribeOn(Schedulers.boundedElastic());
     }
 }

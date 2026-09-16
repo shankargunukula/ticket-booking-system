@@ -18,7 +18,7 @@ def search_movie_showtimes(movie_title: str, city: str, date: str) -> str:
     print(f"[Tool Log] Querying production API for {movie_title} in {city} on {date}...")
 
     # Define base URL destination
-    base_url = "http://localhost:8000/api/v1/movies"
+    base_url = "http://localhost:8000/api/v1/movies/search"
 
     # Encode values cleanly to safely manage spaces and symbols
     params = {

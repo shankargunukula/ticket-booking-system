@@ -1,15 +1,18 @@
+server:
+  port: 8080
+
 spring:
   application:
     name: api-gateway
-  # 🚀 LDAP CLIENT CONFIGURATIONS
+
   ldap:
     urls: ldap://openldap:389
     base: dc=booking,dc=com
     username: cn=admin,dc=booking,dc=com
     password: SecretAdminPassword123
+
   cloud:
     gateway:
-      # DEFAULT FILTERS ARRAY BLOCK TO CLEAN INBOUND TRAFFIC
       default-filters:
         - name: DedupeResponseHeader
           args:
@@ -17,75 +20,48 @@ spring:
             name: Access-Control-Allow-Origin Access-Control-Allow-Credentials Access-Control-Allow-Methods Access-Control-Allow-Headers
 
       routes:
-        # 1. AUTH / REGISTRATION ROUTE BLOCK
+        # 1. Internal Login Engine Routing
+        - id: gateway-login-route
+          uri: forward:///api/v1/auth
+          predicates:
+            - Path=/api/v1/auth/login, /api/v1/auth/logout
+
+        # 2. Third-Party Auth Registration Proxy Mapping
         - id: registration-service-route
           uri: http://ticket-registration-service:5000
           predicates:
             - Path=/api/v1/auth/register
-          filters:
-            - name: CacheRequestBody
-              args:
-                bodyClass: java.lang.String
 
-        # 2. OTP ENGINE ROUTE
-        - id: notification-otp
-          uri: http://tbs-notification-service:8082
-          predicates:
-            - Path=/api/v1/otp/**
-
-        # 🚀 ADD THIS: Route for your Chat AI Python Service Engine
-        - id: chat_ai_route
-          uri: http://ticket-chat-ai-service:8000
-          predicates:
-            - Path=/api/chat/**
-          filters:
-            # 🚀 Intercepts traffic and executes your JWT logic prior to forwarding
-            - JwtValidationFilter
-            # Removes /api from the path structure if your FastAPI expects it stripped
-            - StripPrefix=1
-
-        - id: chat_ai_websocket_route
-          uri: ws://ticket-chat-ai-service:8000
-          predicates:
-              - Path=/api/chat/ws/*
-        # 3. FIXED: PROTECTED MICROSERVICE ROUTE FOR MOVIES AND BOOKINGS
+        # 3. Secure Booking & Movie Management Core Service (Protected by LDAP wall, no roles required)
         - id: booking-service
           uri: http://ticket-booking-service:8081
           predicates:
             - Path=/api/v1/bookings/**, /api/v1/movies/**
           filters:
-            # FIX 1: Enforce correct custom filter factory binding layout mapping rules
-            #- name: AuthenticationFilter
-            # OPTIONAL FIX 2: If ticket-booking-service maps endpoints from the root context internally,
-            # uncomment the StripPrefix filter below to strip out the leading segments:
-            # - StripPrefix=2
+            - name: JwtAuthenticationFilter
 
-      globalcors:
-        cors-configurations:
-          '[/**]':
-            allowedOrigins: "http://localhost:5173"  # Points straight to your React dev port
-            allowedMethods:
-              - GET
-              - POST
-              - PUT
-              - DELETE
-              - OPTIONS
-            allowedHeaders: "*"
-            allowCredentials: true
-        add-to-simple-url-handler-mapping: true
+        # 4. Secure Chat AI Python Engine Integration Mapping Rules
+        - id: chat_ai_route
+          uri: http://ticket-chat-ai-service:8000
+          predicates:
+            - Path=/api/chat/**
+          filters:
+            - name: JwtAuthenticationFilter
+            - StripPrefix=1
+
+        # 5. Non-Blocking Chat AI Websocket Layer Loop Tunneling
+        - id: chat_ai_websocket_route
+          uri: ws://ticket-chat-ai-service:8000
+          predicates:
+            - Path=/api/chat/ws/*
+
 jwt:
-  secret: "YOUR_32_BYTE_LONG_SECURE_HMAC_ENCRYPTION_SECRET_KEY"
-  expiration: 86400000 # Token valid for 24 Hours
+  secret: "YOUR_SUPER_LONG_SECRET_KEY_MUST_BE_AT_LEAST_32_BYTES_LONG!"
+  expiration: 86400000 # 24 Hours in milliseconds
 
 logging:
   pattern:
     level: "%5p [${spring.application.name:-},%X{traceId:-},%X{spanId:-}]"
   level:
-    org.springframework.cloud.gateway: TRACE # Increased to TRACE level to print step-by-step routing loops
-    com.ticket.gateway: DEBUG
-
-      #management:
-#  otlp:
-#    tracing:
-      # This syntax checks for the Docker environment variable first, then defaults to container link
-     # endpoint: ${MANAGEMENT_OTLP_TRACING_ENDPOINT:http://ticket-zipkin:9411/api/v2/spans}
+    org.springframework.cloud.gateway: TRACE
+    com.ticket: DEBUG

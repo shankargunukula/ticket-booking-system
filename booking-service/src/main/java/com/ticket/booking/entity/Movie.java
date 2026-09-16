@@ -9,36 +9,39 @@ import java.util.List;
 @Table(name = "movies")
 @Data
 public class Movie {
+
     @Id
     private String id;
-
-    @Column(nullable = false)
     private String title;
-
-    @Column(nullable = false)
     private String genre;
-
     private Double rating;
 
     @Column(columnDefinition = "TEXT")
     private String synopsis;
 
     private String bannerUrl;
-
-    @Column(nullable = false)
     private Double ticketPrice;
 
-    @ElementCollection
+    // 🛠️ FIX 1: Explicitly force Eager Loading on the Cities List array
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "movie_cities", joinColumns = @JoinColumn(name = "movie_id"))
     @Column(name = "city_name")
     private List<String> cities;
 
-    @ElementCollection
+    // 🛠️ FIX 2: Explicitly force Eager Loading on the Showtimes List array
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "movie_showtimes", joinColumns = @JoinColumn(name = "movie_id"))
-    @Column(name = "showtime_string")
+    @Column(name = "showtimes") // 🚀 Explicitly maps to the column name in your DB
     private List<String> showtimes;
 
-    // Standard Java 21 Empty Constructor
+    // 🛠️ FIX 3: Explicitly force Eager Loading on the ShowDates List array (Missing column fix)
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "movie_show_dates", joinColumns = @JoinColumn(name = "movie_id"))
+    @Column(name = "show_date")
+    private List<String> showDates;
+
+    // --- Standard No-Args Constructor ---
     public Movie() {}
+
 
 }

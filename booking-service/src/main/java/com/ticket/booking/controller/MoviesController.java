@@ -2,6 +2,8 @@ package com.ticket.booking.controller;
 
 import com.ticket.booking.entity.Movie;
 import com.ticket.booking.repository.MovieRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -14,59 +16,119 @@ import java.util.List;
 @CrossOrigin(origins = "*", allowedHeaders = "*")
 public class MoviesController {
 
+    private static final Logger log = LoggerFactory.getLogger(MoviesController.class);
     private final MovieRepository movieRepository;
 
-    // Java 21 Constructor Dependency Injection
     public MoviesController(MovieRepository movieRepository) {
         this.movieRepository = movieRepository;
     }
 
     /**
-     * Unified Endpoint Routing:
-     * 1. GET /api/v1/movies -> Returns a List of all movies.
-     * 2. GET /api/v1/movies?title=...&city=...&date=... -> Returns a single filtered Movie.
+     * 1. GET /api/v1/movies
+     * Fetch all items in the movie catalog.
      */
     @GetMapping
-    public ResponseEntity<?> getMovies(
-            @RequestParam(value = "title", required = false) String title,
-            @RequestParam(value = "city", required = false) String city,
-            @RequestParam(value = "date", required = false) String date) {
+    public ResponseEntity<List<Movie>> getAllMovies(
+            @RequestHeader(value = "X-Authenticated-User", required = false) String username,
+            @RequestHeader(value = "X-Authenticated-Roles", required = false) String roles) {
 
-        // Scenario 1: No query filters passed -> Return all movies in catalog
-        if (title == null && city == null && date == null) {
-            List<Movie> allMovies = movieRepository.findAll();
-            return ResponseEntity.ok(allMovies);
-        }
+        log.info("🎬 [Booking Service] Fetching movie list. Request forwarded by Gateway User: {} | Roles: {}", username, roles);
 
-        // Scenario 2: Search filters passed -> Enforce complete AI parameter contract
-        if (title == null || city == null || date == null) {
+        List<Movie> movies = movieRepository.findAll();
+        return ResponseEntity.ok(movies);
+    }
+
+    /**
+     * 2. GET /api/v1/movies/search?title=...&city=...&date=...
+     * Explicit isolated filtering route to keep contracts clean.
+     */
+    @GetMapping("/search")
+    public ResponseEntity<Movie> filterMovies(
+            @RequestParam("title") String title,
+            @RequestParam("city") String city,
+            @RequestParam("date") String date) {
+
+        // Enforce structural parameters existence contracts
+        if (title.isBlank() || city.isBlank() || date.isBlank()) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Searching requires 'title', 'city', and 'date' parameters."
+                    "Search queries require non-empty 'title', 'city', and 'date' fields."
             );
         }
 
-        System.out.println("[Java Service Log] Query execution: Title=" + title + ", City=" + city + ", Date=" + date);
-
-        // Normalize text layout parameters safely
-        String cleanTitle = title.trim();
-        String cleanCity = city.trim();
-
-        // Query records by Title and check against the child elements Collection Table
-        List<Movie> matchedMovies = movieRepository.findByTitleContainingIgnoreCaseAndCitiesContainingIgnoreCase(
-                cleanTitle, cleanCity
+        List<Movie> matchedMovies = movieRepository.findMoviesByFilters(
+                title.trim(), city.trim(), date.trim()
         );
 
-        // Throw structured 404 block to suppress extra text generation on downstream agent layers
         if (matchedMovies.isEmpty()) {
             throw new ResponseStatusException(
                     HttpStatus.NOT_FOUND,
-                    "No active movie listings found matching your request for '" + title + "' in " + city + "."
+                    "No showtimes found matching '" + title + "' in " + city + " on " + date + "."
             );
         }
 
-        // Return the individual record matching the criteria
-        Movie matchedMovie = matchedMovies.get(0);
-        return ResponseEntity.ok(matchedMovie);
+        // Return first matching record array element
+        return ResponseEntity.ok(matchedMovies.get(0));
+    }
+
+    /**
+     * 3. GET /api/v1/movies/{id}
+     * Get a single movie record by primary key ID.
+     */
+    @GetMapping("/{id}")
+    public ResponseEntity<Movie> getMovieById(@PathVariable("id") String id) {
+        Movie movie = movieRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Movie record not found."));
+        return ResponseEntity.ok(movie);
+    }
+
+    /**
+     * 4. POST /api/v1/movies
+     * Add a completely new movie tracking record payload to the system catalog.
+     */
+    @PostMapping
+    public ResponseEntity<Movie> createMovie(@RequestBody Movie movie) {
+        if (movie.getId() == null || movie.getId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unique Movie structural ID is mandatory.");
+        }
+        Movie savedMovie = movieRepository.save(movie);
+        return ResponseEntity.status(HttpStatus.CREATED).body(savedMovie);
+    }
+
+    /**
+     * 5. PUT /api/v1/movies/{id}
+     * Full updates/replacements on existing record schema contents.
+     */
+    @PutMapping("/{id}")
+    public ResponseEntity<Movie> updateMovie(@PathVariable("id") String id, @RequestBody Movie movieDetails) {
+        Movie existingMovie = movieRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Cannot update non-existent movie resource."));
+
+        // Map payload changes across columns cleanly
+        existingMovie.setTitle(movieDetails.getTitle());
+        existingMovie.setGenre(movieDetails.getGenre());
+        existingMovie.setRating(movieDetails.getRating());
+        existingMovie.setSynopsis(movieDetails.getSynopsis());
+        existingMovie.setBannerUrl(movieDetails.getBannerUrl());
+        existingMovie.setTicketPrice(movieDetails.getTicketPrice());
+        existingMovie.setCities(movieDetails.getCities());
+        existingMovie.setShowtimes(movieDetails.getShowtimes());
+        existingMovie.setShowDates(movieDetails.getShowDates()); // Set tracking operational dates
+
+        Movie updatedMovie = movieRepository.save(existingMovie);
+        return ResponseEntity.ok(updatedMovie);
+    }
+
+    /**
+     * 6. DELETE /api/v1/movies/{id}
+     * Completely wipe a movie structural entity listing out of tracking indexes.
+     */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteMovie(@PathVariable("id") String id) {
+        Movie existingMovie = movieRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Target resource target already absent."));
+
+        movieRepository.delete(existingMovie);
+        return ResponseEntity.noContent().build(); // Standard 204 No Content clean payload structure
     }
 }
