@@ -120,3 +120,8 @@ npm install @opentelemetry/api @opentelemetry/resources @opentelemetry/sdk-trace
 
 npx localtunnel --port 5173
 npx localtunnel --port 8000
+
+# Set Up RAG
+2. Install Your Python Dependencies
+   pip install chromadb llama-index sentence-transformers
+
