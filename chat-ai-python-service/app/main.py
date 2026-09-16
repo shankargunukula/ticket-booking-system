@@ -1,7 +1,7 @@
 import json
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse  # Fixed typo: changed HTMLMock to HTMLResponse
+from fastapi.responses import HTMLResponse
 from app.graph import graph
 
 app = FastAPI(title="Chat AI Python Service")
@@ -15,13 +15,11 @@ class WebSocketInterceptor:
     @staticmethod
     async def before_receive(raw_data: str) -> dict:
         payload = json.loads(raw_data)
-        # Example Interception: Log incoming message details
         print(f"[Interceptor - Inbound] Received payload: {payload}")
         return payload
 
     @staticmethod
     async def before_send(node_name: str, content: str) -> dict:
-        # Example Interception: Inject microservice tracking metadata before sending to client
         outgoing_data = {
             "node": node_name,
             "content": content,
@@ -47,10 +45,11 @@ async def websocket_endpoint(websocket: WebSocket):
 
             user_message = payload.get("message", "")
 
-            # Track if a tool node executed during this interaction loop
-            tool_was_called = False
+            # Temporary holders to prevent duplicate outbound socket streams
+            tool_content_captured = None
+            assistant_content_captured = None
 
-            # Stream steps from the LangGraph execution
+            # Stream steps internally from LangGraph execution
             async for event in graph.astream({"messages": [("user", user_message)]}):
                 for node, output in event.items():
                     if "messages" in output:
@@ -67,24 +66,29 @@ async def websocket_endpoint(websocket: WebSocket):
                         elif isinstance(last_msg.content, str):
                             content_str = last_msg.content
 
-                        # Case A: Handle explicit Tool node returns (ToolMessage)
+                        # Capture explicit Tool node returns (ToolMessage)
                         if hasattr(last_msg, "type") and last_msg.type == "tool":
-                            tool_was_called = True
-                            processed_payload = await WebSocketInterceptor.before_send(
-                                node_name="tools",
-                                content=content_str
-                            )
-                            await websocket.send_json(processed_payload)
+                            tool_content_captured = content_str
 
-                        # Case B: Always stream assistant replies if they contain readable text,
-                        # allowing the LLM to explain tool failures to the user.
+                        # Capture standard assistant textual responses
                         elif content_str.strip():
-                            processed_payload = await WebSocketInterceptor.before_send(
-                                node_name="assistant",
-                                content=content_str
-                            )
-                            await websocket.send_json(processed_payload)
+                            assistant_content_captured = content_str
+
+            # 2. Unified Delivery Logic: Send only ONE frame per interaction cycle
+            if tool_content_captured:
+                # Prioritise rendering the UI widget component card
+                processed_payload = await WebSocketInterceptor.before_send(
+                    node_name="tools",
+                    content=tool_content_captured
+                )
+                await websocket.send_json(processed_payload)
+            elif assistant_content_captured:
+                # Fall back to plain conversational chat bubbles if no tools ran
+                processed_payload = await WebSocketInterceptor.before_send(
+                    node_name="assistant",
+                    content=assistant_content_captured
+                )
+                await websocket.send_json(processed_payload)
 
     except WebSocketDisconnect:
         print("Client disconnected from Python service.")
-

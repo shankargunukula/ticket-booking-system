@@ -3,7 +3,7 @@ import ToolDispatcher from './ToolDispatcher';
 
 export default function ChatWindow({ token }) {
   const [messages, setMessages] = useState([
-    { id: '1', role: 'assistant', text: 'Hello! How can I assist you with your booking reservations today?' }
+    { id: '1', role: 'tools', text: 'Hello! How can I assist you with your booking reservations today?' }
   ]);
   const [input, setInput] = useState('');
   const [isConnected, setIsConnected] = useState(false);
@@ -23,28 +23,60 @@ export default function ChatWindow({ token }) {
         const payload = JSON.parse(event.data);
         const { node, content } = payload;
 
-        if (node === 'assistant' && content) {
-          setMessages((prev) => [...prev, { id: Date.now().toString(), role: 'assistant', text: content }]);
-        }
-        else if (node === 'tools' && content) {
+        if (node === 'tools' && content) {
           try {
-            const structuredToolData = JSON.parse(content);
-            setMessages((prev) => [...prev, {
-              id: Date.now().toString(),
-              role: 'assistant',
-              isToolPayload: true,
-              toolName: structuredToolData.type || null,
-              isError: !!structuredToolData.error,
-              toolData: structuredToolData
-            }]);
+            const rawBackendData = JSON.parse(content);
+
+            // 1. Sniff out if this is the search_movie_showtimes function structure
+            if (rawBackendData.results && rawBackendData.results.length > 0) {
+              const firstMovie = rawBackendData.results[0];
+
+              // 2. Map backend schema to match properties expected by MovieShowtimesView
+              const structuredToolData = {
+                type: 'search_movie_showtimes',
+                movie: firstMovie.title,
+                city: firstMovie.cities?.[0] || 'Chicago', // Fallback context
+                date: 'Today',
+                details: {
+                  genre: firstMovie.genre,
+                  rating: firstMovie.rating,
+                  showtimes: firstMovie.showtimes,
+                  ticket_price: `$${firstMovie.ticketPrice?.toFixed(2)}`
+                }
+              };
+
+              setMessages((prev) => [...prev, {
+                id: 'tool-' + Date.now().toString(),
+                role: 'assistant',
+                isToolPayload: true,
+                toolName: 'search_movie_showtimes',
+                isError: false,
+                toolData: structuredToolData
+              }]);
+            }
           } catch (e) {
-            console.log("Raw tool output string: ", content);
+            console.error("Failed to parse inner tool content object: ", e);
           }
+        }
+        else if (node === 'assistant' && content) {
+          // 3. Prevent the redundant natural text from printing if a card was just drawn
+          // Check if the previous message block was a movie tool payload card
+          setMessages((prev) => {
+            const lastMessage = prev[prev.length - 1];
+            if (lastMessage && lastMessage.isToolPayload && lastMessage.toolName === 'search_movie_showtimes') {
+              console.log("Silenced trailing text confirmation to clean up workspace view.");
+              return prev; // Return without adding the text bubble duplicate
+            }
+
+            // Render normal text interactions as usual
+            return [...prev, { id: Date.now().toString(), role: 'assistant', text: content }];
+          });
         }
       } catch (err) {
         console.error("Error processing incoming socket message: ", err);
       }
     };
+
 
     ws.current.onclose = () => {
       setIsConnected(false);
