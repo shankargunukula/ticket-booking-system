@@ -4,6 +4,7 @@ Here is a preview of the interactive dashboard interface:
 
 ![Application Dashboard](./assets/screenshot.png)
 
+![Application Dashboard](./assets/screenshot2.png)
 
 # Re-evaluate changes
 docker compose down
