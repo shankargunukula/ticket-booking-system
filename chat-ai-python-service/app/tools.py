@@ -4,31 +4,43 @@ import urllib.request
 import urllib.parse
 
 
+import urllib.request
+import urllib.parse
+
+
+import json
+from langchain_core.tools import tool
+import urllib.request
+import urllib.parse
+from typing import Optional
+
 @tool
-def search_movie_showtimes(movie_title: str, city: str, date: str) -> str:
+def search_movie_showtimes(
+        movie_title: Optional[str] = None,
+        city: Optional[str] = None,
+        date: Optional[str] = None
+) -> str:
     """
-    Searches the theater registry for available showtimes, screening formats, and seat availability.
-    Use this whenever a user asks about movie schedules, theater locations, or ticket prices.
-
-    Args:
-        movie_title: The name of the movie (e.g., 'Inception', 'The Dark Knight').
-        city: The target city location (e.g., 'Chicago', 'New York').
-        date: The target date in YYYY-MM-DD format.
+    Searches the theater registry for available showtimes and movie details.
     """
-    print(f"[Tool Log] Querying production API for {movie_title} in {city} on {date}...")
+    base_url = "http://booking-service:8081/api/v1/movies/search"
 
-    # Define base URL destination
-    base_url = "http://localhost:8080/api/v1/movies/search"
+    # 1. Cleanly filter out 'None' or empty string values entirely
+    params = {}
+    if movie_title and str(movie_title).strip().lower() != "none":
+        params["title"] = movie_title.strip()
+    if city and str(city).strip().lower() != "none":
+        params["city"] = city.strip()
+    if date and str(date).strip().lower() != "none":
+        params["date"] = date.strip()
 
-    # Encode values cleanly to safely manage spaces and symbols
-    params = {
-        "title": movie_title.strip(),
-        "city": city.strip(),
-        "date": date.strip()
-    }
+    if not params:
+        return json.dumps({"error": "Please provide at least one valid parameter (title, city, or date)."})
+
     url_parts = urllib.parse.urlencode(params)
     request_url = f"{base_url}?{url_parts}"
-    print(f"[DEBUG CRITICAL] Raw Request URL is: >>>{request_url}<<<")
+    print(f"[DEBUG CRITICAL] Outbound REST URL is: >>>{request_url}<<<")
+
     try:
         req = urllib.request.Request(
             url=request_url,
@@ -36,41 +48,20 @@ def search_movie_showtimes(movie_title: str, city: str, date: str) -> str:
         )
 
         with urllib.request.urlopen(req, timeout=5) as response:
-            if response.status == 200:
-                raw_data = response.read().decode("utf-8")
-                api_response = json.loads(raw_data)
-
-                # Check if the API itself returned an interior data error object
-                if isinstance(api_response, dict) and "error" in api_response:
-                    return json.dumps({"error": api_response["error"]})
-
-                return json.dumps({
-                    "movie": movie_title,
-                    "city": city,
-                    "date": date,
-                    "details": {
-                        "showtimes": api_response.get("showtimes"),
-                        "genres": [api_response.get("genre")], # Converts single string to expected list array
-                        "rating": api_response.get("rating"),
-                        "ticket_price": f"${api_response.get('ticketPrice')}" # Maps camelCase to snake_case string with currency symbol
-                    }
-                })
-            else:
-                return json.dumps({"error": f"Service returned abnormal status: {response.status}"})
+            raw_data = response.read().decode("utf-8")
+            return json.dumps({"search_criteria": params, "results": json.loads(raw_data)})
 
     except urllib.error.HTTPError as e:
-        # Handles explicit non-200 responses (such as 404, 500, etc.) safely
+        # CRITICAL: Read what the Java application actually threw (500 Internal Error, 400 Bad Request)
         try:
-            error_body = json.loads(e.read().decode("utf-8"))
-            # Extracts detail field if using a standard FastAPI validation/NotFound layout
-            msg = error_body.get("detail", f"No showtimes matching your query found ({e.code}).")
-            return json.dumps({"error": msg})
+            error_msg = e.read().decode("utf-8")
+            return json.dumps({"error": f"Java Backend Error ({e.code}): {error_msg}"})
         except Exception:
-            return json.dumps({"error": f"Movie registry returned error code {e.code}."})
+            return json.dumps({"error": f"Java backend responded with HTTP Status {e.code}"})
 
     except urllib.error.URLError as e:
-        # Catch connection failures, bad DNS lookups, or local port connection dropouts
-        return json.dumps({"error": "Movie schedule database is temporarily unreachable. Please try again later."})
+        return json.dumps({"error": f"Network connectivity problem: {str(e.reason)}"})
+
 
 
 
