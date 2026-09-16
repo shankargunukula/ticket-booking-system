@@ -1,3 +1,10 @@
+# 🎬 Booking AI Support Application
+
+Here is a preview of the interactive dashboard interface:
+
+![Application Dashboard](./assets/screenshot.png)
+
+
 # Re-evaluate changes
 docker compose down
 
@@ -110,3 +117,5 @@ npm install @opentelemetry/sdk-node
 npm install @opentelemetry/api @opentelemetry/resources @opentelemetry/sdk-trace-node @opentelemetry/semantic-conventions @opentelemetry/exporter-zipkin @opentelemetry/instrumentation-express @opentelemetry/instrumentation-http
 
 
+npx localtunnel --port 5173
+npx localtunnel --port 8000
