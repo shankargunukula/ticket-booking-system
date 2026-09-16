@@ -30,9 +30,8 @@ export default function Login({ onLoginSuccess }) {
 
       if (response.status === 200 && response.data.authenticated) {
              setStatus({ type: 'success', message: 'Access granted!' });
-
         // Pass the returned JWT token values up to your App State container
-        onLoginSuccess(response.data.username, response.data.token);
+        onLoginSuccess(response.data.token, response.data.username);
       } else {
         setStatus({ type: 'error', message: data.message || 'LDAP Verification failed.' });
       }

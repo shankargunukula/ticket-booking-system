@@ -103,7 +103,8 @@ public class SecurityConfig {
                                             Map<String, Object> responseBody = Map.of(
                                                     "username", ldapUser.getUsername(),
                                                     "dn", ldapUser.getDn(),
-                                                    "authenticated", true
+                                                    "authenticated", true,
+                                                    "token", jwtToken
                                             );
 
                                             return ServerResponse.ok()
