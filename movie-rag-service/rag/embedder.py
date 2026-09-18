@@ -3,7 +3,6 @@ import numpy as np
 from sentence_transformers import SentenceTransformer
 from config import LOCAL_EMBED_MODEL
 
-# Load the lightweight model into memory once
 print(f"Loading local embedding model: {LOCAL_EMBED_MODEL}...")
 model = SentenceTransformer(LOCAL_EMBED_MODEL)
 

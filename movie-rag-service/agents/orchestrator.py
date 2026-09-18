@@ -1,17 +1,20 @@
 # agents/orchestrator.py
+import json
 from openai import OpenAI
-from config import OPENAI_API_KEY, LLM_MODEL_NAME
+from config import OLLAMA_BASE_URL, LLM_MODEL_NAME
 from agents.tools import search_movie_by_vibe, check_theater_showtimes
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+# Instantiates an OpenAI connection directed cleanly to Ollama's runtime layer port
+client = OpenAI(base_url=OLLAMA_BASE_URL, api_key="ollama")
+
 AVAILABLE_TOOLS = {
     "search_movie_by_vibe": search_movie_by_vibe,
     "check_theater_showtimes": check_theater_showtimes
 }
 
 def run_agent_loop(user_input: str) -> str:
-    """Executes the agent execution loop with Function Calling integration support."""
-    # Define tool structures for the LLM schema interface
+    """Executes the agent execution loop with local Ollama tool orchestration support."""
+
     tools_schema = [
         {
             "type": "function",
@@ -40,13 +43,19 @@ def run_agent_loop(user_input: str) -> str:
     ]
 
     messages = [
-        {"role": "system", "content": "You are a movie theater assistant agent. Use semantic searches for moods and direct tools for clear scheduling inquiries."},
+        {
+            "role": "system",
+            "content": "You are a concise movie theater assistant. Answer questions directly in 1 or 2 short sentences using the tools. Do not elaborate or make up facts."
+        },
         {"role": "user", "content": user_input}
     ]
 
-    # First Call to look for Tool Execution Requirements
+    # Evaluate whether a local database function call should execute
     response = client.chat.completions.create(
-        model=LLM_MODEL_NAME, messages=messages, tools=tools_schema, tool_choice="auto"
+        model=LLM_MODEL_NAME,
+        messages=messages,
+        tools=tools_schema,
+        tool_choice="auto"
     )
 
     response_message = response.choices[0].message
@@ -55,13 +64,12 @@ def run_agent_loop(user_input: str) -> str:
     if tool_calls:
         messages.append(response_message)
 
-        # Execute the called tool locally
         for tool_call in tool_calls:
             function_name = tool_call.function.name
-            function_args = eval(tool_call.function.arguments)
+            function_args = json.loads(tool_call.function.arguments)
             tool_function = AVAILABLE_TOOLS[function_name]
 
-            # Execute actual internal python function block wrapper
+            # Execute tool queries directly against the local Chroma runtime context
             tool_result = tool_function.invoke(function_args)
 
             messages.append({
@@ -71,7 +79,7 @@ def run_agent_loop(user_input: str) -> str:
                 "content": tool_result
             })
 
-        # Final answer formulation with injected data context blocks
+        # Synthesize the final localized text output response block
         final_response = client.chat.completions.create(model=LLM_MODEL_NAME, messages=messages)
         return final_response.choices[0].message.content
 

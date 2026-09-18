@@ -1,48 +1,54 @@
 # agents/tools.py
+import json
 from langchain_core.tools import tool
-from database.connection import SessionLocal, Movie, Showtime
+from database.connection import get_movie_collection
 from rag.embedder import get_embedding
 
 @tool
 def search_movie_by_vibe(semantic_query: str) -> str:
     """Useful when the user asks for movie recommendations based on vibes, feelings, plots, themes, or moods."""
-    db = SessionLocal()
-
-    # Generate the vector representation of the query locally
+    collection = get_movie_collection()
     query_vector = get_embedding(semantic_query)
 
-    # pgvector syntax: `<=>` computes Cosine Distance.
-    # Sorting by low distance yields high similarity matches.
-    result = (
-        db.query(Movie)
-        .filter(Movie.is_playing == True)
-        .order_by(Movie.embedding.cosine_distance(query_vector))
-        .first()
+    # Query ChromaDB using the pre-computed vector space
+    results = collection.query(
+        query_embeddings=[query_vector],
+        n_results=1,
+        where={"is_playing": True}
     )
 
-    if not result:
-        db.close()
+    if not results or not results["metadatas"] or len(results["metadatas"][0]) == 0:
         return "No matching vibes currently available in theaters."
 
-    response = f"Top Choice: '{result.title}'. Description: {result.plot_summary} Vibes: {result.vibes}."
-    db.close()
-    return response
+    # Safely extract values from the top result layer list array
+    metadata = results["metadatas"][0][0]
+    return f"Top Choice: '{metadata['title']}'. Description: {metadata['plot_summary']} Vibes: {metadata['vibes']}."
 
 @tool
 def check_theater_showtimes(movie_title: str) -> str:
     """Useful when the user explicitly requests specific timings, screens, or availability schedules for a concrete movie title."""
-    db = SessionLocal()
-    movie = db.query(Movie).filter(Movie.title.like(f"%{movie_title}%")).first()
+    collection = get_movie_collection()
 
-    if not movie:
-        db.close()
+    # Query all records from the database
+    all_records = collection.get()
+
+    if not all_records or not all_records["metadatas"]:
         return f"Sorry, '{movie_title}' is not playing right now."
 
-    showtimes = db.query(Showtime).filter(Showtime.movie_id == movie.id).all()
-    db.close()
+    # Local substring lookup match implementation for text string matching
+    target_metadata = None
+    for meta in all_records["metadatas"]:
+        if movie_title.lower() in meta.get("title", "").lower():
+            target_metadata = meta
+            break
 
-    if not showtimes:
-        return f"'{movie.title}' is registered but has no scheduled showtimes today."
+    if not target_metadata:
+        return f"Sorry, '{movie_title}' is not playing right now."
 
-    schedule = [f"Theater: {s.theater_name} at {s.time_slot}" for s in showtimes]
-    return f"Showtimes for '{movie.title}': " + " | ".join(schedule)
+    raw_showtimes = target_metadata.get("showtimes")
+    if not raw_showtimes:
+        return f"'{target_metadata['title']}' is registered but has no scheduled showtimes today."
+
+    showtimes_list = json.loads(raw_showtimes)
+    schedule = [f"Theater: {s['theater_name']} at {s['time_slot']}" for s in showtimes_list]
+    return f"Showtimes for '{target_metadata['title']}': " + " | ".join(schedule)

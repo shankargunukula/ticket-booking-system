@@ -1,38 +1,23 @@
 # database/connection.py
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, ForeignKey, text
-from sqlalchemy.orm import declarative_base, sessionmaker, relationship
-from pgvector.sqlalchemy import Vector  # Import native pgvector support for SQLAlchemy
-from config import DATABASE_URL
+import os
+import chromadb
+from config import CHROMA_PERSISTENT_PATH
 
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
+# Ensure the directory path exists locally before running initialization hooks
+os.makedirs(CHROMA_PERSISTENT_PATH, exist_ok=True)
 
-class Movie(Base):
-    __tablename__ = "movies"
-    id = Column(Integer, primary_key=True, index=True)
-    title = Column(String, unique=True, index=True)
-    plot_summary = Column(String)
-    vibes = Column(String)
-    is_playing = Column(Boolean, default=True)
+# Global client persistent initialization
+chroma_client = chromadb.PersistentClient(path=CHROMA_PERSISTENT_PATH)
 
-    # 384 dimensions matches the local all-MiniLM-L6-v2 model shape
-    embedding = Column(Vector(384))
-
-    showtimes = relationship("Showtime", back_populates="movie")
-
-class Showtime(Base):
-    __tablename__ = "showtimes"
-    id = Column(Integer, primary_key=True, index=True)
-    movie_id = Column(Integer, ForeignKey("movies.id"))
-    theater_name = Column(String)
-    time_slot = Column(String)
-
-    movie = relationship("Movie", back_populates="showtimes")
+def get_movie_collection():
+    """Retrieves or creates the Chroma collection for movies."""
+    return chroma_client.get_or_create_collection(
+        name="movies_collection",
+        metadata={"hnsw:space": "cosine"}
+    )
 
 def init_db():
-    # Ensure pgvector extension is enabled inside your PostgreSQL cluster
-    with engine.connect() as conn:
-        conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
-        conn.commit()
-    Base.metadata.create_all(bind=engine)
+    """Initializes the collection and ensures it is clear or accessible."""
+    collection = get_movie_collection()
+    print(f"Chroma DB successfully initialized at: {CHROMA_PERSISTENT_PATH}")
+    return collection

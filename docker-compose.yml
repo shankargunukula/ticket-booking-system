@@ -9,6 +9,8 @@ volumes:
     driver: local
   ldap_config:
     driver: local
+  ollama_storage:   # Preserves downloaded model assets across builds
+  chroma_storage:   # Ensures persistent storage permissions line up accurately
 
 services:
 
@@ -23,7 +25,6 @@ services:
       - LDAP_ORGANISATION=BookingSystem
       - LDAP_DOMAIN=booking.com
       - LDAP_ADMIN_PASSWORD=SecretAdminPassword123
-    # 🚀 FIXED: Absolute working healthcheck utilizing native slapd processes internally
     healthcheck:
       test: ["CMD-SHELL", "pidof slapd || exit 1"]
       interval: 5s
@@ -51,16 +52,6 @@ services:
     networks:
       - ticket-network
     restart: always
-
-#  # 10. Centralized Distributed Tracing Engine Dashboard
-#  zipkin:
-#    image: openzipkin/zipkin:latest
-#    container_name: ticket-zipkin
-#    ports:
-#      - "9411:9411"
-#    networks:
-#      - ticket-network
-#    restart: always
 
   # 1. In-Memory Data Store & Fast Seat Locking Engine
   redis:
@@ -119,6 +110,9 @@ services:
       - "host.docker.internal:host-gateway"
     ports:
       - "8081:8081"
+    volumes:
+      # 👇 MOUNT YOUR WINDOWS MAVEN CACHE INTO THE CONTAINER
+      - C:\Users\Gopi\.m2:/root/.m2
     environment:
       - SERVER_PORT=8081
       - SPRING_DATA_REDIS_HOST=redis
@@ -137,7 +131,8 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ~/.m2:/root/.m2
+      # 👇 MOUNT YOUR WINDOWS MAVEN CACHE INTO THE CONTAINER
+      - C:\Users\Gopi\.m2:/root/.m2
     deploy:
       resources:
         limits:
@@ -148,8 +143,6 @@ services:
         condition: service_started
       booking-service:
         condition: service_started
-     # notification-service:
-      #  condition: service_started
       registration-service:
         condition: service_started
     environment:
@@ -158,103 +151,13 @@ services:
       - NOTIFICATION_SERVICE_URL=http://tbs-notification-service:8082
       - BOOKING_SERVICE_URL=http://ticket-booking-service:8081
       - AUTH_SERVICE_URL=http://ticket-registration-service:5000
-      #- MANAGEMENT_OTLP_TRACING_ENDPOINT=http://ticket-zipkin:9411/api/v2/spans
       - JAVA_OPTS=-XX:+UseParallelGC -Xms64m -Xmx256m
     networks:
       - ticket-network
 
-#  # 5. Production-Ready Stable Open Source SMSC Telecom Channel Simulator
-#  smpp-simulator:
-#    image: bitsensedev/smpp-sim:latest
-#    container_name: ticket-smpp-simulator
-#    ports:
-#      - "2775:2775"
-#      - "8088:8989"
-#    networks:
-#      - ticket-network
-#    restart: always
-
-#  # 6. Notification Hub Core Microservice
-#  notification-service:
-#    build: ./notification-service
-#    container_name: ticket-notification-service
-#    ports:
-#      - "8082:8082"
-#    volumes:
-#      - ~/.m2:/root/.m2
-#    deploy:
-#      resources:
-#        limits:
-#          cpus: '0.75'
-#          memory: 300M
-#    environment:
-#      - SERVER_PORT=8082
-#      - SPRING_DATA_REDIS_HOST=redis
-#      - SPRING_DATA_REDIS_PORT=6379
-#      - SMPP_HOST=smpp-simulator
-#      - SMPP_PORT=2775
-#      - SMTP_HOST=://gmail.com
-#      - SMTP_PORT=587
-#      - SMTP_USERNAME=your-email@gmail.com
-#      - SMTP_PASSWORD=your-app-password
-#      - MANAGEMENT_OTLP_TRACING_ENDPOINT=http://ticket-zipkin:9411/api/v2/spans
-#    depends_on:
-#      redis:
-#        condition: service_started
-#      smpp-simulator:
-#        condition: service_started
-#    networks:
-#      - ticket-network
-#    restart: on-failure
-
-#  # 7. Time-Series Database for k6 Metrics
-#  influxdb:
-#    image: influxdb:1.8
-#    container_name: ticket-influxdb
-#    ports:
-#      - "8086:8086"
-#    environment:
-#      - INFLUXDB_DB=k6
-#    networks:
-#      - ticket-network
-#
-#  # 8. Metrics Visualization UI
-#  grafana:
-#    image: grafana/grafana:10.2.2
-#    container_name: ticket-grafana
-#    ports:
-#      - "3000:3000"
-#    environment:
-#      - GF_SECURITY_ADMIN_PASSWORD=admin
-#      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
-#      - GF_AUTH_ANONYMOUS_ENABLED=true
-#    depends_on:
-#      - influxdb
-#    networks:
-#      - ticket-network
-#
-#  # 9. Performance & Load Testing Container
-#  k6:
-#    image: grafana/k6:latest
-#    container_name: ticket-k6
-#    volumes:
-#      - ./scripts:/scripts
-#    environment:
-#      - K6_OUT=influxdb=http://influxdb:8086/k6
-#    command: run /scripts/test.js
-#    depends_on:
-#      - influxdb
-#      - api-gateway
-#    extra_hosts:
-#      - "host.docker.internal:host-gateway"
-#    networks:
-#      - ticket-network
-
-
-
   # 11. Custom Identity Provider & User Directory Auth Backend
   registration-service:
-    build: ./registration-service  # 🔄 FIXED: Point to backend directory containing your package.json
+    build: ./registration-service
     container_name: ticket-registration-service
     ports:
       - "5000:5000"
@@ -263,12 +166,9 @@ services:
       - LDAP_URL=ldap://openldap:389
       - LDAP_ADMIN_DN=cn=admin,dc=booking,dc=com
       - LDAP_ADMIN_PASSWORD=SecretAdminPassword123
-     # - ZIPKIN_ENDPOINT=http://ticket-zipkin:9411/api/v2/spans
     depends_on:
       openldap:
         condition: service_healthy
-     # zipkin:
-     #   condition: service_started
     networks:
       - ticket-network
     restart: always
@@ -295,3 +195,41 @@ services:
     networks:
       - ticket-network
     restart: unless-stopped
+
+#  # 15. The Core AI Local Service Engine (CPU Optimized)
+#  ollama-service:
+#    image: ollama/ollama:latest
+#    container_name: ollama_core
+#    volumes:
+#      - ollama_storage:/root/.ollama
+#    environment:
+#      - OLLAMA_NUM_PARALLEL=1      # CPU Optimization: Prevents core threads thrashing
+#      - OLLAMA_KEEP_ALIVE=-1       # CPU Optimization: Locks model in memory indefinitely
+#    healthcheck:
+#      test: [ "CMD", "curl", "-f", "http://localhost:11434/" ]
+#      interval: 5s
+#      timeout: 3s
+#      retries: 5
+#    networks:
+#      - ticket-network
+#    restart: unless-stopped
+#
+#  # 16. Your Lightweight, High-Performance Microservice Container
+#  movie-rag-service:
+#    build:
+#      context: ./movie-rag-service
+#      dockerfile: Dockerfile
+#    container_name: movie_rag_agent
+#    ports:
+#      - "8001:8001"
+#    environment:
+#      - OLLAMA_BASE_URL=http://ollama-service:11434/v1
+#      - CHROMA_PERSISTENT_PATH=/app/chroma_db
+#    depends_on:
+#      ollama-service:
+#        condition: service_healthy
+#    volumes:
+#      - chroma_storage:/app/chroma_db
+#    networks:
+#      - ticket-network
+#    restart: unless-stopped

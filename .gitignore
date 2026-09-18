@@ -9,3 +9,4 @@ out
 .env
 .env.*
 !.env.example
+/movie-rag-service/venv/
